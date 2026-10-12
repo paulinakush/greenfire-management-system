@@ -1,0 +1,916 @@
+/* ---------------------------------------------------------
+   UI COMPARTIDA — interfaces privadas de Green Fire.
+
+   Fuente canónica de estos componentes. No se carga en runtime
+   (un fetch de esto rompe si la página se abre con file://): el
+   contenido está pegado en texto plano dentro del app-source de
+   login.html / sucursal.html / fabrica.html. Si editás algo acá,
+   replicá el cambio en las tres páginas.
+
+   Mecánica de navegación tipo ERP (topbar + sidebar con acordeón +
+   dashboard con widgets + patrón de listado con toolbar/filtros/
+   tabla paginada), inspirada en la estructura de sistema.fidel.com.ar
+   pero con la piel visual de Green Fire: chrome oscuro (#1A312B),
+   verde institucional (#00AE4C) como acento activo, Plus Jakarta Sans
+   + Instrument Serif itálica para eyebrows, pills de estado.
+--------------------------------------------------------- */
+
+const ROLE_LABELS = {
+  empleado_sucursal: "Empleado de sucursal",
+  responsable_sucursal: "Responsable de sucursal",
+  administrativo_fabrica: "Administrativo de fábrica",
+};
+
+const ESTADO_STYLES = {
+  pendiente: "bg-neutral/25 text-deep/70",
+  confirmado: "bg-institutional/15 text-institutional",
+  rechazado: "bg-red-100 text-red-700",
+  en_preparacion: "bg-amber-100 text-amber-700",
+  listo_retiro: "bg-sky-100 text-sky-700",
+  pendiente_envio: "bg-amber-100 text-amber-700",
+  finalizado: "bg-deep/10 text-deep/70",
+};
+
+const money = (n) =>
+  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
+
+const fmtDate = (iso) => {
+  if (!iso) return "-";
+  // Fechas "solo fecha" (YYYY-MM-DD) se arman en horario local: new Date(iso)
+  // las interpreta como medianoche UTC y en husos negativos (AR) muestran el
+  // día anterior.
+  const soloFecha = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = soloFecha ? new Date(`${iso}T00:00:00`) : new Date(iso);
+  return d.toLocaleDateString("es-AR");
+};
+
+const fmtDateTime = (iso) => {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+};
+
+const enumLabel = (enumName, value) => {
+  const item = (window.GF_ENUMS[enumName] || []).find((e) => e.value === value);
+  return item ? item.label : value;
+};
+
+const exportCSV = (filename, columns, rows) => {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = columns.map((c) => esc(c.label)).join(",");
+  const lines = rows.map((r) => columns.map((c) => esc(c.csvValue ? c.csvValue(r) : c.searchValue ? c.searchValue(r) : r[c.key])).join(","));
+  const csv = [header, ...lines].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+/* ---------- Iconos SVG inline (mismo estilo que la interfaz pública) ---------- */
+
+const LeafIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M5 21c8 0 14-6 14-14V5h-2C9 5 5 11 5 19v2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M5 21c3-4 6-7 12-10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const MenuIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CloseIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CheckIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 12.5l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const AlertIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 3.5L22 20.5H2L12 3.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M12 10v4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <circle cx="12" cy="17.4" r="0.9" fill="currentColor" />
+  </svg>
+);
+
+const BoxIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M3 8l9-5 9 5-9 5-9-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M3 8v9l9 5 9-5V8M12 13v9" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+  </svg>
+);
+
+const TruckIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M2 7h11v9H2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M13 10h4l4 3.5V16h-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="6.5" cy="18" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="17" cy="18" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+const ClipboardIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="5" y="4" width="14" height="17" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M9 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M8 11h8M8 15h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const CashIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const FactoryIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M3 21V11l5 3v-3l5 3V8l6 4v9H3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M6 21v-4M11 21v-4M16 21v-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+);
+
+const BeakerIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M9 3h6M10 3v6.5L4.8 18a2 2 0 001.7 3h11a2 2 0 001.7-3L14 9.5V3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M7 15h10" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+const ChartIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M2 20h20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const UsersIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M16 6.5a3 3 0 010 5.8M20.5 20c0-2.6-1.8-4.8-4.2-5.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const LogoutIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const PlusIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const EyeIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const EditIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 20l.9-3.6L16.6 4.7a1.5 1.5 0 012.1 0l1.6 1.6a1.5 1.5 0 010 2.1L8.6 20.1 4 20z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M14.5 6.8l2.7 2.7" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const TrashIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const PowerIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M7 5.5a8 8 0 105.9-.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const PrinterIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 9V4h12v5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <rect x="4" y="9" width="16" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M6 14h12v6H6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+  </svg>
+);
+
+const DownloadIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const BellIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 10a6 6 0 1112 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const DotsIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const SearchIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M20 20l-4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const ColumnsIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M9 4v16M15 4v16" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const PlugIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M9 3v5M15 3v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M6 8h12v3a6 6 0 01-12 0V8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M12 17v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const IdCardIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="8.5" cy="11" r="1.8" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M5.5 15.5c.6-1.4 1.8-2 3-2s2.4.6 3 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <path d="M14 10h5M14 13h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const FlameIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path
+      d="M12 2.5c1.2 2.8-1.8 4.4-2.6 7-.5 1.7 0 3 1 3.8-1.4-.2-2.3-1.4-2.3-3 0-.8.2-1.4.5-2C6.7 9.8 5 12.3 5 15.2 5 19 8.1 22 12 22s7-3 7-6.8c0-2.6-1.3-4.8-3.3-6.2.4 1.6-.3 2.8-1.4 3.2-1 .4-1.9-.2-1.9-1.3 0-2.1 1.6-3.3 1.6-5.4 0-1.4-.8-2.7-2-3z"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/* ---------- Componentes base ---------- */
+
+const StatusPill = ({ estado }) => (
+  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${ESTADO_STYLES[estado] || "bg-neutral/25 text-deep/70"}`}>
+    {enumLabel("estado_pedido", estado)}
+  </span>
+);
+
+const PagoPill = ({ habilitado }) =>
+  habilitado ? (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-institutional/15 text-institutional">
+      <CheckIcon className="w-3.5 h-3.5" /> Pago habilitado
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-neutral/25 text-deep/50">
+      Pago no habilitado
+    </span>
+  );
+
+const Button = ({ variant = "primary", className = "", ...rest }) => {
+  const base = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+  const variants = {
+    primary: "bg-institutional text-white hover:bg-medium",
+    secondary: "bg-white text-deep border border-deep/15 hover:border-deep/30",
+    danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50",
+    ghost: "text-deep/70 hover:bg-deep/5",
+  };
+  return <button className={`${base} ${variants[variant] || variants.primary} ${className}`} {...rest} />;
+};
+
+const Card = ({ className = "", children }) => (
+  <div className={`bg-white rounded-2xl border border-deep/8 shadow-sm ${className}`}>{children}</div>
+);
+
+const SectionBar = ({ eyebrowNumber, eyebrow, title, description, accent = "#00AE4C", action, search }) => (
+  <div className="mb-6 flex items-stretch gap-3">
+    <div className="w-1 rounded-full shrink-0" style={{ background: accent }} />
+    <div className="flex-1 min-w-0">
+      {eyebrow && (
+        <p className="font-accent italic text-lg text-institutional leading-none mb-1.5 flex items-baseline gap-2">
+          {eyebrowNumber && <span className="not-italic font-display font-bold text-xs text-deep/35 tracking-wider">{eyebrowNumber}</span>}
+          {eyebrow}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display font-bold text-2xl text-deep">{title}</h1>
+          {description && <p className="mt-1 text-sm text-deep/55">{description}</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          {search}
+          {action}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const EmptyState = ({ text }) => <div className="text-center py-12 text-sm text-deep/45">{text}</div>;
+
+const TableWrap = ({ children }) => <div className="overflow-x-auto rounded-2xl border border-deep/8">{children}</div>;
+
+const Toast = ({ message, kind = "success", onClose }) => {
+  if (!message) return null;
+  const styles = kind === "error" ? "bg-red-600" : "bg-institutional";
+  return (
+    <div className={`fixed bottom-5 right-5 z-50 ${styles} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-3`}>
+      {message}
+      <button onClick={onClose} className="opacity-80 hover:opacity-100">
+        <CloseIcon className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
+
+const Modal = ({ open, onClose, title, children, wide }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-deep/50" onClick={onClose}>
+      <div
+        className={`bg-white rounded-2xl shadow-xl w-full ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-deep/8 sticky top-0 bg-white">
+          <h3 className="font-display font-bold text-lg text-deep">{title}</h3>
+          <button onClick={onClose} className="text-deep/40 hover:text-deep">
+            <CloseIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+const Field = ({ label, children }) => (
+  <label className="block">
+    <span className="block text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1.5">{label}</span>
+    {children}
+  </label>
+);
+
+const inputClass =
+  "w-full rounded-xl border border-deep/15 px-3.5 py-2.5 text-sm text-deep focus:outline-none focus:ring-2 focus:ring-institutional/40 focus:border-institutional";
+
+/* ---------- Topbar ---------- */
+
+const Topbar = ({ session, quickAccess, activeKey, onNavigate, notifCount, onLogout, onMenuClick }) => {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const iniciales = session.nombre
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-deep text-white flex items-center gap-3 px-4 md:px-6">
+      <button onClick={onMenuClick} className="p-2 -ml-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 md:hidden shrink-0" title="Menú">
+        <MenuIcon className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => onNavigate(session.rolNombre === "empleado_sucursal" ? "clientes" : "dashboard")}
+        title="Green Fire"
+        className="p-2.5 rounded-xl text-institutional hover:bg-white/10 transition-colors shrink-0"
+      >
+        <FlameIcon className="w-6 h-6" />
+      </button>
+      <div className="h-8 w-px bg-white/10 hidden md:block shrink-0" />
+
+      <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar">
+        {quickAccess.map((q) => {
+          const target = q.target || q.key;
+          return (
+            <button
+              key={q.key}
+              title={q.label}
+              onClick={() => onNavigate(target)}
+              className={`p-2.5 rounded-xl transition-colors shrink-0 ${
+                activeKey === target ? "bg-institutional text-white" : "text-white/55 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {q.icon}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="flex-1" />
+
+      <button className="relative p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 shrink-0" title="Notificaciones">
+        <BellIcon className="w-5 h-5" />
+        {notifCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">
+            {notifCount}
+          </span>
+        )}
+      </button>
+
+      {session.sucursalNombre && (
+        <span className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full bg-white/10 text-xs font-semibold shrink-0 max-w-[160px] truncate">
+          {session.sucursalNombre}
+        </span>
+      )}
+
+      <div className="relative shrink-0">
+        <button onClick={() => setUserMenuOpen((v) => !v)} className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-full bg-institutional text-white text-xs font-bold flex items-center justify-center">{iniciales}</span>
+        </button>
+        {userMenuOpen && (
+          <div
+            className="absolute right-0 top-11 w-52 bg-white rounded-xl shadow-xl text-deep py-2 z-50"
+            onMouseLeave={() => setUserMenuOpen(false)}
+          >
+            <p className="px-3.5 py-1.5 text-sm font-semibold truncate">{session.nombre}</p>
+            <p className="px-3.5 pb-2 text-xs text-deep/50">{ROLE_LABELS[session.rolNombre]}</p>
+            <div className="border-t border-deep/8" />
+            <button onClick={onLogout} className="w-full text-left px-3.5 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+              <LogoutIcon className="w-4 h-4" /> Cerrar sesión
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
+
+/* ---------- Sidebar con acordeón ---------- */
+
+const Sidebar = ({ modules, activeKey, onNavigate, mobileOpen, onCloseMobile }) => {
+  const parentOfActive = modules.find((m) => m.children && m.children.some((c) => c.key === activeKey));
+  const [openKey, setOpenKey] = useState(parentOfActive ? parentOfActive.key : null);
+
+  const navigate = (key) => {
+    onNavigate(key);
+    onCloseMobile();
+  };
+
+  return (
+    <>
+      {mobileOpen && <div className="fixed inset-0 bg-deep/60 z-20 md:hidden" onClick={onCloseMobile} />}
+      <aside
+        className={`fixed top-16 left-0 bottom-0 w-64 bg-deep border-r border-white/5 overflow-y-auto py-4 z-30 transition-transform duration-200 md:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <nav className="px-3 space-y-1">
+          {modules.map((m) => {
+          if (m.children) {
+            const isOpen = openKey === m.key;
+            const childActive = m.children.some((c) => c.key === activeKey);
+            return (
+              <div key={m.key}>
+                <button
+                  onClick={() => setOpenKey(isOpen ? null : m.key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    childActive ? "text-institutional" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {m.icon}
+                  <span className="flex-1 text-left">{m.label}</span>
+                  <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                </button>
+                {isOpen && (
+                  <div className="mt-1 ml-4 pl-4 border-l border-white/10 space-y-0.5">
+                    {m.children.map((c) => {
+                      const active = activeKey === c.key;
+                      return (
+                        <button
+                          key={c.key}
+                          onClick={() => navigate(c.key)}
+                          className={`relative w-full flex items-center gap-2 pl-3 pr-2 py-2 rounded-lg text-sm text-left ${
+                            active ? "bg-institutional/15 text-institutional font-semibold" : "text-white/60 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          {active && <span className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-institutional" />}
+                          <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60 shrink-0" />
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          const active = activeKey === m.key;
+          return (
+            <button
+              key={m.key}
+              onClick={() => navigate(m.key)}
+              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                active ? "bg-institutional/15 text-institutional font-semibold" : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-institutional" />}
+              {m.icon}
+              {m.label}
+            </button>
+          );
+          })}
+        </nav>
+      </aside>
+    </>
+  );
+};
+
+const PrivateShell = ({ session, modules, quickAccess, activeKey, onNavigate, notifCount = 0, onLogout, children }) => {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  return (
+    <div className="min-h-screen bg-[#F4F7F5]">
+      <Topbar
+        session={session}
+        quickAccess={quickAccess}
+        activeKey={activeKey}
+        onNavigate={onNavigate}
+        notifCount={notifCount}
+        onLogout={onLogout}
+        onMenuClick={() => setMobileNavOpen(true)}
+      />
+      <Sidebar
+        modules={modules}
+        activeKey={activeKey}
+        onNavigate={onNavigate}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+      <main className="pt-16 pl-0 md:pl-64 min-h-screen">
+        <div className="px-5 md:px-8 py-8 max-w-[1400px]">{children}</div>
+      </main>
+    </div>
+  );
+};
+
+/* ---------- Dashboard: KPIs, widgets, gráfico ---------- */
+
+const KpiCard = ({ icon, color = "#00AE4C", label, value }) => (
+  <Card className="p-5 flex items-center gap-4">
+    <span className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1a`, color }}>
+      {icon}
+    </span>
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-deep/45">{label}</p>
+      <p className="text-2xl font-display font-bold text-deep truncate">{value}</p>
+    </div>
+  </Card>
+);
+
+const WidgetCard = ({ title, accent = "#00AE4C", footer, children }) => (
+  <Card className="overflow-hidden">
+    <div className="h-1" style={{ background: accent }} />
+    <div className="p-5">
+      <h3 className="font-display font-bold text-base text-deep mb-3">{title}</h3>
+      {children}
+    </div>
+    {footer && <div className="px-5 py-3 border-t border-deep/8">{footer}</div>}
+  </Card>
+);
+
+const CHART_RANGES = [
+  { key: "semana", label: "Última Semana" },
+  { key: "mes", label: "Último Mes" },
+  { key: "6meses", label: "Últimos 6 Meses" },
+];
+
+const SalesChart = ({ data, range, onRangeChange }) => {
+  const [hover, setHover] = useState(null);
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const w = 640,
+    h = 220,
+    padTop = 16,
+    padBottom = 28,
+    padSide = 8,
+    barGap = 10;
+  const barW = data.length ? (w - padSide * 2 - barGap * (data.length - 1)) / data.length : 0;
+  const hasData = data.some((d) => d.value > 0);
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+        <h3 className="font-display font-bold text-base text-deep">Ventas por período</h3>
+        <div className="flex items-center gap-1 bg-deep/5 rounded-full p-1">
+          {CHART_RANGES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => onRangeChange(r.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                range === r.key ? "bg-institutional text-white" : "text-deep/60 hover:text-deep"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!hasData ? (
+        <EmptyState text="Todavía no hay ventas ni pedidos confirmados en este período." />
+      ) : (
+        <div className="relative">
+          <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-52" preserveAspectRatio="none">
+            {data.map((d, i) => {
+              const barH = Math.max(2, ((h - padTop - padBottom) * d.value) / max);
+              const x = padSide + i * (barW + barGap);
+              const y = h - padBottom - barH;
+              return (
+                <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((v) => (v === i ? null : v))}>
+                  <rect x={x} y={padTop} width={barW} height={h - padTop - padBottom} fill="transparent" />
+                  <rect x={x} y={y} width={barW} height={barH} rx={4} fill={hover === i ? "#29683D" : "#00AE4C"} />
+                  <text x={x + barW / 2} y={h - 8} textAnchor="middle" fontSize="9" fill="#1A312B" opacity="0.45">
+                    {d.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          {hover !== null && data[hover] && (
+            <div
+              className="absolute -translate-x-1/2 -translate-y-full bg-deep text-white text-xs rounded-lg px-2.5 py-1.5 pointer-events-none whitespace-nowrap"
+              style={{
+                left: `${((padSide + hover * (barW + barGap) + barW / 2) / w) * 100}%`,
+                top: `${((h - padBottom - Math.max(2, ((h - padTop - padBottom) * data[hover].value) / max)) / h) * 100}%`,
+              }}
+            >
+              {money(data[hover].value)}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+/* ---------- Patrón de listado: toolbar, filtros, tabla ---------- */
+
+const ListToolbar = ({ onNew, newLabel = "Nuevo", onExport, onPrint, extraActions }) => (
+  <div className="flex flex-wrap items-center gap-2 mb-4">
+    {onNew && (
+      <Button onClick={onNew}>
+        <PlusIcon /> {newLabel}
+      </Button>
+    )}
+    <div className="flex-1" />
+    {onExport && (
+      <Button variant="secondary" onClick={onExport}>
+        <DownloadIcon className="w-4 h-4" /> Exportar
+      </Button>
+    )}
+    {onPrint && (
+      <Button variant="secondary" onClick={onPrint}>
+        <PrinterIcon className="w-4 h-4" /> Imprimir
+      </Button>
+    )}
+    {extraActions}
+  </div>
+);
+
+const FiltersBar = ({ filters }) => {
+  if (!filters || filters.length === 0) return null;
+  return (
+    <div className="grid gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-4">
+      {filters.map((f, i) => (
+        <div key={i}>
+          <label className="block text-[11px] font-semibold uppercase tracking-wide text-deep/45 mb-1">{f.label}</label>
+          <select value={f.value} onChange={(e) => f.onChange(e.target.value)} className={inputClass}>
+            {f.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const RowActions = ({ onView, onEdit, onDelete, deleteIcon: DeleteIcon = TrashIcon, deleteLabel = "Eliminar", onPrint, extra }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <div className="flex items-center gap-1 justify-end">
+      {onView && (
+        <button onClick={onView} title="Ver detalle" className="p-1.5 rounded-lg text-deep/50 hover:text-institutional hover:bg-institutional/10">
+          <EyeIcon />
+        </button>
+      )}
+      {onEdit && (
+        <button onClick={onEdit} title="Editar" className="p-1.5 rounded-lg text-deep/50 hover:text-institutional hover:bg-institutional/10">
+          <EditIcon />
+        </button>
+      )}
+      {onPrint && (
+        <button onClick={onPrint} title="Imprimir" className="p-1.5 rounded-lg text-deep/50 hover:text-institutional hover:bg-institutional/10">
+          <PrinterIcon />
+        </button>
+      )}
+      {onDelete && (
+        <button onClick={onDelete} title={deleteLabel} className="p-1.5 rounded-lg text-deep/50 hover:text-red-600 hover:bg-red-50">
+          <DeleteIcon />
+        </button>
+      )}
+      {extra && extra.length > 0 && (
+        <div className="relative">
+          <button onClick={() => setMenuOpen((v) => !v)} title="Otros" className="p-1.5 rounded-lg text-deep/50 hover:text-deep hover:bg-deep/5">
+            <DotsIcon />
+          </button>
+          {menuOpen && (
+            <div
+              className="absolute right-0 top-9 w-56 bg-white rounded-xl shadow-xl border border-deep/8 py-1.5 z-30"
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              {extra.map((it, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    it.onClick();
+                  }}
+                  className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-deep/80 hover:bg-deep/5 text-left"
+                >
+                  {it.icon}
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DataTable = ({ columns, rows, getRowId, actionsRenderer, searchPlaceholder = "Buscar…", pageSizeOptions = [10, 25, 50] }) => {
+  const [query, setQuery] = useState("");
+  const [visibleCols, setVisibleCols] = useState(() => new Set(columns.filter((c) => c.defaultVisible !== false).map((c) => c.key)));
+  const [colsMenuOpen, setColsMenuOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
+  const [page, setPage] = useState(1);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter((r) => columns.some((c) => String((c.searchValue ? c.searchValue(r) : r[c.key]) ?? "").toLowerCase().includes(q)))
+    : rows;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const pageRows = filtered.slice(start, start + pageSize);
+  const visibleColumns = columns.filter((c) => visibleCols.has(c.key));
+
+  const toggleCol = (key) => {
+    setVisibleCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-deep/35" />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder={searchPlaceholder}
+            className={`${inputClass} pl-9`}
+          />
+        </div>
+        <div className="flex-1" />
+        <div className="relative">
+          <Button variant="secondary" onClick={() => setColsMenuOpen((v) => !v)}>
+            <ColumnsIcon /> Columnas
+          </Button>
+          {colsMenuOpen && (
+            <div
+              className="absolute right-0 top-11 w-56 bg-white rounded-xl shadow-xl border border-deep/8 py-2 z-30"
+              onMouseLeave={() => setColsMenuOpen(false)}
+            >
+              {columns.map((c) => (
+                <label key={c.key} className="flex items-center gap-2 px-3.5 py-1.5 text-sm text-deep/80 cursor-pointer">
+                  <input type="checkbox" checked={visibleCols.has(c.key)} onChange={() => toggleCol(c.key)} />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+          className={`${inputClass} w-auto`}
+        >
+          {pageSizeOptions.map((n) => (
+            <option key={n} value={n}>
+              {n} por página
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState text="No se encontraron resultados." />
+      ) : (
+        <>
+          <TableWrap>
+            <table className="w-full text-sm">
+              <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+                <tr>
+                  {visibleColumns.map((c) => (
+                    <th key={c.key} className="text-left px-4 py-3 font-semibold whitespace-nowrap">
+                      {c.label}
+                    </th>
+                  ))}
+                  {actionsRenderer && <th className="px-4 py-3"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((row, i) => (
+                  <tr key={getRowId(row)} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                    {visibleColumns.map((c) => (
+                      <td key={c.key} className="px-4 py-3 border-t border-deep/5">
+                        {c.render ? c.render(row) : row[c.key]}
+                      </td>
+                    ))}
+                    {actionsRenderer && <td className="px-4 py-3 border-t border-deep/5">{actionsRenderer(row)}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3 text-sm text-deep/55">
+            <p>
+              {start + 1}-{Math.min(start + pageSize, filtered.length)} de {filtered.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1.5 rounded-lg border border-deep/10 disabled:opacity-30"
+              >
+                ‹
+              </button>
+              <span className="px-2">
+                {safePage} / {totalPages}
+              </span>
+              <button
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1.5 rounded-lg border border-deep/10 disabled:opacity-30"
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};

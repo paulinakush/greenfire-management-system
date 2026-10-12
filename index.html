@@ -1,0 +1,1877 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Green Fire | Grow Shop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          deep: '#1A312B',
+          forest: '#214635',
+          brand: '#2A673D',
+        },
+        fontFamily: {
+          sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          display: ['"Space Grotesk"', 'sans-serif'],
+          accent: ['"Instrument Serif"', 'serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .side-rays-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    pointer-events: none;
+    z-index: 3;
+    overflow: hidden;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .blob-shape {
+    border-radius: 63% 37% 54% 46% / 55% 45% 55% 45%;
+    transition: border-radius 0.7s ease;
+  }
+  .blob-shape:hover {
+    border-radius: 45% 55% 46% 54% / 45% 55% 45% 55%;
+  }
+</style>
+</head>
+<body class="bg-white text-deep antialiased">
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script id="app-source" type="text/plain">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------------------------------------------------------
+   TILT — efecto "tarjeta 3D" con CSS transform (perspective +
+   rotateX/rotateY) siguiendo el cursor, sin librerías externas
+--------------------------------------------------------- */
+
+const TILT_RESET = {
+  transform: "perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)",
+  transition: "transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
+};
+
+const useTilt = ({ max = 10, scale = 1.04 } = {}) => {
+  const ref = useRef(null);
+  const [style, setStyle] = useState(TILT_RESET);
+
+  const onMouseMove = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    setStyle({
+      transform:
+        `perspective(900px) rotateX(${(-py * max * 2).toFixed(2)}deg) ` +
+        `rotateY(${(px * max * 2).toFixed(2)}deg) scale3d(${scale}, ${scale}, ${scale})`,
+      transition: "transform 0.08s linear",
+    });
+  };
+
+  const onMouseLeave = () => setStyle(TILT_RESET);
+
+  return { ref, style, onMouseMove, onMouseLeave };
+};
+
+const TiltBox = ({ as: As = "div", className, style, tiltMax = 10, tiltScale = 1.04, children, ...rest }) => {
+  const tilt = useTilt({ max: tiltMax, scale: tiltScale });
+  return (
+    <As
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      className={className}
+      style={{ ...style, ...tilt.style, willChange: "transform" }}
+      {...rest}
+    >
+      {children}
+    </As>
+  );
+};
+
+/* ---------------------------------------------------------
+   RUTAS DE IMÁGENES REALES (assets/productos, assets/logos)
+--------------------------------------------------------- */
+
+const IMG = {
+  logoBlanco: "assets/logos/logo-blanco-v2.png",
+
+  champicompost: "assets/productos/pack-champicompost_3-1-3-YX4jyQWb0vFeOKoj.png.avif",
+  champicompostCut: "assets/productos/champicompost-nobg.png",
+
+  industrialMain: "assets/productos/01---industrial-completo---transparente-sombra-d95ZKRWDDqhq1PV0.png.avif",
+  industrialMockup: "assets/productos/mockup-industrial-AR01y6e2wwTx43Vp.png.avif",
+  industrialMainCut: "assets/productos/industrial-main-nobg.png",
+
+  cocoFire: "assets/productos/coco-fire.png",
+  growLight: "assets/productos/grow-light.png",
+  huerteroPlus: "assets/productos/huertero-plus.png",
+  premiumMix: "assets/productos/premium-mix.png",
+
+  cocoFireCut: "assets/productos/coco-fire-nobg.png",
+  growLightCut: "assets/productos/grow-light-nobg.png",
+  huerteroPlusCut: "assets/productos/huertero-plus-nobg.png",
+  premiumMixCut: "assets/productos/premium-mix-nobg.png",
+
+  lampDetalle: "assets/productos/c0d8e47d-fb6b-4f2d-83c5-3dc3cce6303b.jpg",
+  lampAbierta: "assets/productos/7c59a8ab-aae2-4c6b-bd82-6358be6d71dd.jpg",
+  lampInstalada: "assets/productos/e06e1366-a9e2-4335-9fc4-c8cf67a2732a.jpg",
+  lampChips: "assets/productos/77add15c-b863-4255-872e-3219eee53c08.jpg",
+  lampPPFD: "assets/productos/818840b9-c05a-476a-8e1a-745a75079da6.jpg",
+  lampTablaChips: "assets/productos/99fa1a7b-95cc-4602-8f71-080ad90045c7.png",
+  lampEspectro: "assets/productos/bffe3b4e-3a84-48d9-9837-2cacf4b83df1.jpg",
+  lampAccesorios: "assets/productos/f3d5fc4c-ee84-4ddb-91df-2fa9c8f6bd9c.jpg",
+  lampDetalles2: "assets/productos/22be25de-8ed7-4883-a29d-66539a7d86a5.png",
+
+  equipoGreenfire: "assets/nosotros/equipo-greenfire.jpg",
+  localGreenfire: "assets/nosotros/local-greenfire.jpg",
+};
+
+const HERO_VIDEO = "assets/hero/hero-bg.mp4";
+const HERO_VIDEO_POSTER = "assets/hero/hero-poster.jpg";
+
+/* ---------------------------------------------------------
+   DATOS DE EJEMPLO (mock, hardcodeados)
+--------------------------------------------------------- */
+
+const CATEGORIES = ["Sustratos", "Carpas de cultivo", "Fertilizantes", "Iluminación LED", "Herramientas"];
+
+const formatPrice = (n) => "$" + n.toLocaleString("es-AR");
+
+const PRODUCTS = [
+  {
+    id: "coco-fire",
+    category: "Sustratos",
+    name: "Coco Fire",
+    line: "coco",
+    lineLabel: "Línea Esencial",
+    accent: "#B98146",
+    size: "50 L / 1690 oz",
+    price: 21900,
+    image: IMG.cocoFire,
+    description: "Sustrato premium a base de fibra de coco, 100% orgánico, elaborado con nuestro ChampiCompost.",
+    longDescription: "Coco Fire es nuestro sustrato premium a base de fibra de coco. 100% orgánico y elaborado con ChampiCompost, la enmienda insignia de Green Fire. Ideal para quienes buscan un sustrato liviano, con excelente retención de humedad y aireación, para acompañar todas las etapas del cultivo.",
+    badges: ["100% orgánico", "Línea propia"],
+  },
+  {
+    id: "grow-light",
+    category: "Sustratos",
+    name: "Grow Light",
+    line: "verde",
+    lineLabel: "Línea Esencial",
+    accent: "#2A673D",
+    size: "50 L / 1690 oz",
+    price: 19900,
+    image: IMG.growLight,
+    description: "Sustrato profesional de nuestra Línea Esencial, 100% orgánico y a base de ChampiCompost.",
+    longDescription: "Grow Light es nuestro sustrato profesional de la Línea Esencial. 100% orgánico, a base de ChampiCompost, pensado para acompañar el vegetativo con una mezcla equilibrada, aireada y con buena capacidad de retención.",
+    badges: ["100% orgánico", "Línea propia"],
+  },
+  {
+    id: "huertero-plus",
+    category: "Sustratos",
+    name: "Huertero Plus",
+    line: "naranja",
+    lineLabel: "Línea Esencial",
+    accent: "#C9762F",
+    size: "50 L / 1690 oz",
+    price: 19900,
+    image: IMG.huerteroPlus,
+    description: "Sustrato profesional de nuestra Línea Esencial, 100% orgánico y a base de ChampiCompost.",
+    longDescription: "Huertero Plus es nuestro sustrato profesional de la Línea Esencial. 100% orgánico, a base de ChampiCompost, formulado para huertas y cultivos urbanos que necesitan un aporte extra de nutrientes desde la base.",
+    badges: ["100% orgánico", "Línea propia"],
+  },
+  {
+    id: "premium-mix",
+    category: "Sustratos",
+    name: "Premium Mix",
+    line: "violeta",
+    lineLabel: "Línea Esencial",
+    accent: "#6C4B9E",
+    size: "50 L / 1690 oz",
+    price: 22900,
+    image: IMG.premiumMix,
+    description: "Sustrato profesional de nuestra Línea Esencial, 100% orgánico y a base de ChampiCompost.",
+    longDescription: "Premium Mix es nuestro sustrato profesional de la Línea Esencial. 100% orgánico, a base de ChampiCompost, la mezcla más completa de la gama para quienes buscan máximo rendimiento en floración.",
+    badges: ["100% orgánico", "Línea propia"],
+  },
+  {
+    id: "industrial-liviano",
+    category: "Sustratos",
+    name: "Industrial Liviano",
+    line: "industrial",
+    lineLabel: "Línea Industrial",
+    accent: "#7C8B7F",
+    size: "Bolsa 80 dm³",
+    price: 28900,
+    image: IMG.industrialMain,
+    description: "Volumen, practicidad y una mezcla equilibrada. ChampiCompost + perlita, turba y otros componentes.",
+    longDescription: "Industrial Liviano es el sustrato diseñado para quienes buscan volumen, practicidad y una mezcla equilibrada para distintos tipos de cultivo. Combina el ChampiCompost exclusivo de Green Fire con materias primas seleccionadas (perlita, turba y otros componentes) que aseguran un sustrato aireado, liviano y de excelente drenaje. Presentación en bolsas de 80 dm³. Ideal para proyectos de gran escala, invernaderos, viveros y productores que necesitan rendimiento y consistencia lote tras lote.",
+    badges: ["Nuevo", "Gran escala"],
+  },
+  {
+    id: "coco-elite",
+    category: "Sustratos",
+    name: "Coco Elite",
+    line: "elite",
+    lineLabel: "Línea Inerte",
+    accent: "#3E6E52",
+    size: "Consultar presentaciones",
+    price: 24900,
+    image: null,
+    placeholderLabel: "Coco Elite",
+    description: "Sustratos completamente inertes, para tener control total de la nutrición de tu cultivo.",
+    longDescription: "La Línea Inerte es 100% inerte, pensada para quienes quieren control total sobre la nutrición de sus plantas: el aliado ideal para producción con fertilizantes. Disponible en dos versiones.",
+    badges: ["Nuevo", "Inerte"],
+    variants: [
+      { key: "elite", label: "Coco Elite", price: 24900, note: "70% fibra de coco + 30% perlita." },
+      { key: "elite-plus", label: "Coco Elite Plus", price: 29900, note: "100% fibra de coco." },
+    ],
+  },
+  {
+    id: "carpa-80",
+    category: "Carpas de cultivo",
+    name: "Carpa Indoor 80x80x160",
+    size: "80 x 80 x 160 cm",
+    price: 89900,
+    image: null,
+    description: "Carpa de cultivo compacta, ideal para espacios chicos y primeras experiencias indoor.",
+    longDescription: "Carpa de cultivo compacta, tela reforzada y interior reflectante. Ideal para espacios chicos, balcones o primeras experiencias indoor.",
+    badges: ["Compacta"],
+  },
+  {
+    id: "carpa-120",
+    category: "Carpas de cultivo",
+    name: "Carpa Indoor 120x120x200",
+    size: "120 x 120 x 200 cm",
+    price: 134900,
+    image: null,
+    description: "Carpa de cultivo grande, para quienes ya suman más plantas o buscan más rendimiento.",
+    longDescription: "Carpa de cultivo de mayor porte, con más lugares de ventilación y acceso. Para cultivos con varias plantas o mayor equipamiento.",
+    badges: ["Alto rendimiento"],
+  },
+  {
+    id: "fert-floracion",
+    category: "Fertilizantes",
+    name: "Kit Floración Bio",
+    size: "3 x 500 ml",
+    price: 24500,
+    image: null,
+    description: "Kit de fertilizantes orgánicos pensado para acompañar toda la etapa de floración.",
+    longDescription: "Kit de tres fertilizantes orgánicos pensados para acompañar toda la etapa de floración, de la mano de nuestro equipo.",
+    badges: ["Orgánico"],
+  },
+  {
+    id: "fert-raices",
+    category: "Fertilizantes",
+    name: "Booster Raíces",
+    size: "250 ml",
+    price: 9900,
+    image: null,
+    description: "Estimulador de raíces para un arranque fuerte desde el primer trasplante.",
+    longDescription: "Estimulador de raíces pensado para acompañar el trasplante y dar un arranque fuerte desde el primer día.",
+    badges: ["Enraizante"],
+  },
+  {
+    id: "led-100",
+    category: "Iluminación LED",
+    name: "Panel LED 100W Full Spectrum",
+    size: "100W",
+    price: 119900,
+    image: null,
+    description: "Panel LED de espectro completo, ideal para carpas chicas o cultivos en vegetativo.",
+    longDescription: "Panel LED de espectro completo pensado para carpas chicas, con bajo consumo y buena cobertura lumínica.",
+    badges: ["Bajo consumo"],
+  },
+  {
+    id: "led-200",
+    category: "Iluminación LED",
+    name: "Panel LED 200W Pro",
+    size: "200W",
+    price: 219900,
+    image: null,
+    description: "Panel LED de mayor potencia, pensado para cultivos con más plantas o carpas grandes.",
+    longDescription: "Panel LED de mayor potencia y cobertura, pensado para carpas grandes o cultivos con varias plantas en simultáneo.",
+    badges: ["Alta potencia"],
+  },
+  {
+    id: "herr-tijeras",
+    category: "Herramientas",
+    name: "Kit Tijeras de Poda",
+    size: "Set x 2",
+    price: 14900,
+    image: null,
+    description: "Set de tijeras de precisión para poda y cosecha, cómodas y fáciles de mantener.",
+    longDescription: "Set de dos tijeras de precisión, pensadas para poda formativa y cosecha, con mango ergonómico.",
+    badges: ["Precisión"],
+  },
+  {
+    id: "herr-ph",
+    category: "Herramientas",
+    name: "pH Metro Digital",
+    size: "Unidad",
+    price: 32900,
+    image: null,
+    description: "Medidor digital de pH, fácil de calibrar y usar en cada riego.",
+    longDescription: "Medidor digital de pH, compacto y fácil de calibrar, para llevar un control simple en cada riego.",
+    badges: ["Digital"],
+  },
+];
+
+const BRANCHES = [
+  {
+    name: "Green Fire Centro",
+    address: "Av. Corrientes 1234, CABA",
+    hours: "Lun a Sáb de 9 a 19 hs",
+  },
+  {
+    name: "Green Fire Norte",
+    address: "Av. Maipú 2450, Vicente López",
+    hours: "Lun a Vie de 9 a 18:30 hs · Sáb de 9 a 13 hs",
+  },
+  {
+    name: "Green Fire Oeste",
+    address: "Av. Rivadavia 8900, Morón",
+    hours: "Lun a Sáb de 9 a 19:30 hs",
+  },
+];
+
+const LAMPARA_FEATURES = [
+  "Chips Samsung LM301H Evo Mint White → mejor penetración y balance en rango verde, chips especializados para horticultura (de ahí la H en el nombre)",
+  "Espectro completo: 3000K, 5000K, Mint White + Deep Red, Blue, UV e IR → ideal para crecimiento y floración",
+  "Eficiencia real de 3.0 µmol/J (test report validado)",
+  "PPF 2202.8 µmol/s (725 W reales) = más gramos por watt",
+  "Cobertura efectiva 1.5 m² en cultivo indoor",
+  "3 años de garantía oficial GreenFire",
+  "Conexión en serie vía RJ11 + driver interno de alta confiabilidad",
+  "Certificaciones internacionales: CE · RoHS · FCC",
+  "Incluye accesorios de instalación (ganchos + poleas)",
+];
+
+const LAMPARA_GALLERY = [
+  { src: IMG.lampDetalle, alt: "GreenFire Silver 2.1, detalle del cuerpo y los brazos LED" },
+  { src: IMG.lampAbierta, alt: "GreenFire Silver 2.1 desplegada, espectro Full Cycle encendido" },
+  { src: IMG.lampInstalada, alt: "GreenFire Silver 2.1 instalada con poleas" },
+  { src: IMG.lampChips, alt: "Comparativa de chips Samsung LM301H EVO vs LM281B" },
+  { src: IMG.lampEspectro, alt: "Espectro comprobado Full Cycle de la Silver 2.1" },
+  { src: IMG.lampTablaChips, alt: "Rango espectral y función de cada chip" },
+  { src: IMG.lampPPFD, alt: "Certificado de rendimiento lumínico PPFD a 30 cm" },
+  { src: IMG.lampAccesorios, alt: "Accesorios incluidos: cables, ganchos y poleas" },
+  { src: IMG.lampDetalles2, alt: "Anclajes, potenciómetro y puerto RJ11" },
+];
+
+/* ---------------------------------------------------------
+   ICONOS (SVG inline, sin librerías externas)
+--------------------------------------------------------- */
+
+const LeafIcon = ({ className = "w-8 h-8" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M5 21c8 0 14-6 14-14V5h-2C9 5 5 11 5 19v2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M5 21c3-4 6-7 12-10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const CheckIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 12.5l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const MenuIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CloseIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CartIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M3 4h2l2.4 12.4a2 2 0 002 1.6h7.6a2 2 0 002-1.6L21 8H6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="10" cy="21" r="1.4" fill="currentColor" />
+    <circle cx="18" cy="21" r="1.4" fill="currentColor" />
+  </svg>
+);
+
+const PinIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 21s7-6.1 7-11.5A7 7 0 105 9.5C5 14.9 12 21 12 21z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="12" cy="9.5" r="2.3" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const ClockIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M12 7.5V12l3 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+/* ---------------------------------------------------------
+   PLACEHOLDER DE PRODUCTO (sin foto real)
+--------------------------------------------------------- */
+
+const ProductPlaceholder = ({ label, accent = "#2A673D" }) => (
+  <div
+    className="w-full h-full flex flex-col items-center justify-center gap-2 rounded-2xl"
+    style={{
+      background: `linear-gradient(135deg, ${accent}22 0%, ${accent}44 100%)`,
+    }}
+  >
+    <LeafIcon className="w-10 h-10" />
+    <span className="text-[11px] font-semibold uppercase tracking-wide text-deep/70 text-center px-3">
+      {label || "Green Fire"}
+    </span>
+  </div>
+);
+
+/* ---------------------------------------------------------
+   NAVBAR
+--------------------------------------------------------- */
+
+const NAV_LINKS = [
+  { label: "Inicio", href: "/" },
+  { label: "Sustratos", href: "/sustratos" },
+  { label: "Lámparas", href: "/lamparas" },
+  { label: "Catálogo", href: "/catalogo" },
+  { label: "Sucursales", href: "/sucursales" },
+  { label: "Contacto", href: "/contacto" },
+];
+
+const Navbar = ({ cartCount, route, navigate }) => {
+  const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const isHome = route === "/";
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const handleClick = (e, href) => {
+    e.preventDefault();
+    setOpen(false);
+    navigate(href);
+  };
+
+  const solid = !isHome || scrolled || open;
+
+  return (
+    <header
+      className={
+        "fixed top-0 inset-x-0 z-40 transition-colors duration-300 border-b " +
+        (solid
+          ? "bg-deep/95 backdrop-blur border-white/10"
+          : "bg-transparent border-transparent")
+      }
+    >
+      <div className="max-w-7xl mx-auto px-5 md:px-8">
+        <div className="relative overflow-hidden flex items-center justify-between h-20 md:h-24">
+          <div className="absolute inset-0">
+            <SideRays
+              speed={2.5}
+              rayColor1="#EAB308"
+              rayColor2="#10B981"
+              intensity={2}
+              spread={2}
+              origin="top-right"
+              tilt={0}
+              saturation={1.5}
+              blend={0.75}
+              falloff={1.6}
+              opacity={1}
+            />
+          </div>
+
+          <a href="/" onClick={(e) => handleClick(e, "/")} className="relative z-10 flex items-center gap-2 shrink-0">
+            <img src={IMG.logoBlanco} alt="Green Fire" className="h-8 md:h-10 w-auto" />
+          </a>
+
+          <nav className="relative z-10 hidden md:flex items-center gap-8">
+            {NAV_LINKS.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                onClick={(e) => handleClick(e, l.href)}
+                className={
+                  "text-sm font-medium transition-colors " +
+                  (route === l.href ? "text-white" : "text-white/70 hover:text-white")
+                }
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="relative z-10 flex items-center gap-3">
+            <button
+              aria-label="Carrito"
+              className="relative text-white/90 hover:text-white transition-colors p-2"
+            >
+              <CartIcon className="w-6 h-6" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-white text-deep text-[10px] font-bold rounded-full w-4.5 h-4.5 min-w-[18px] h-[18px] flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+            <button
+              className="md:hidden text-white p-1"
+              aria-label="Abrir menú"
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? <CloseIcon /> : <MenuIcon />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {open && (
+        <div className="md:hidden bg-deep border-t border-white/10 px-5 pb-5 pt-2">
+          <nav className="flex flex-col gap-1">
+            {NAV_LINKS.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                onClick={(e) => handleClick(e, l.href)}
+                className="py-3 text-white/90 text-base font-medium border-b border-white/5 last:border-0"
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+        </div>
+      )}
+    </header>
+  );
+};
+
+/* ---------------------------------------------------------
+   MASKED HEADING (técnica de clip-text tipo React Bits "Gradient Text",
+   adaptada para un título grande de dos líneas)
+--------------------------------------------------------- */
+
+const hexToRgb = hex => {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255] : [1, 1, 1];
+};
+
+const originToFlip = origin => {
+  switch (origin) {
+    case 'top-left': return [1, 0];
+    case 'bottom-right': return [0, 1];
+    case 'bottom-left': return [1, 1];
+    default: return [0, 0];
+  }
+};
+
+const SideRays = ({
+  speed = 2.5,
+  rayColor1 = '#EAB308',
+  rayColor2 = '#96c8ff',
+  intensity = 2,
+  spread = 2,
+  origin = 'top-right',
+  tilt = 0,
+  saturation = 1.5,
+  blend = 0.75,
+  falloff = 1.6,
+  opacity = 1.0,
+  className = ''
+}) => {
+  const containerRef = useRef(null);
+  const uniformsRef = useRef(null);
+  const rendererRef = useRef(null);
+  const animationIdRef = useRef(null);
+  const meshRef = useRef(null);
+  const cleanupFunctionRef = useRef(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const observerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    observerRef.current = new IntersectionObserver(
+      entries => {
+        const entry = entries[0];
+        setIsVisible(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    observerRef.current.observe(containerRef.current);
+
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible || !containerRef.current) return;
+
+    if (cleanupFunctionRef.current) {
+      cleanupFunctionRef.current();
+      cleanupFunctionRef.current = null;
+    }
+
+    const initializeWebGL = async () => {
+      if (!containerRef.current) return;
+
+      const { Renderer, Program, Triangle, Mesh } = await import('https://esm.sh/ogl@1.0.6');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      if (!containerRef.current) return;
+
+      const renderer = new Renderer({
+        dpr: Math.min(window.devicePixelRatio, 2),
+        alpha: true
+      });
+      rendererRef.current = renderer;
+
+      const gl = renderer.gl;
+      gl.canvas.style.width = '100%';
+      gl.canvas.style.height = '100%';
+
+      while (containerRef.current.firstChild) {
+        containerRef.current.removeChild(containerRef.current.firstChild);
+      }
+      containerRef.current.appendChild(gl.canvas);
+
+      const vert = `
+attribute vec2 position;
+void main() {
+  gl_Position = vec4(position, 0.0, 1.0);
+}`;
+
+      const frag = `precision highp float;
+
+uniform float iTime;
+uniform vec2 iResolution;
+uniform float iSpeed;
+uniform vec3 iRayColor1;
+uniform vec3 iRayColor2;
+uniform float iIntensity;
+uniform float iSpread;
+uniform float iFlipX;
+uniform float iFlipY;
+uniform float iTilt;
+uniform float iSaturation;
+uniform float iBlend;
+uniform float iFalloff;
+uniform float iOpacity;
+
+float rayStrength(vec2 raySource, vec2 rayRefDirection, vec2 coord, float seedA, float seedB, float speed) {
+  vec2 sourceToCoord = coord - raySource;
+  float cosAngle = dot(normalize(sourceToCoord), rayRefDirection);
+  return clamp(
+    (0.45 + 0.15 * sin(cosAngle * seedA + iTime * speed)) +
+    (0.3 + 0.2 * cos(-cosAngle * seedB + iTime * speed)),
+    0.0, 1.0) *
+    clamp((iResolution.x - length(sourceToCoord)) / iResolution.x, 0.5, 1.0);
+}
+
+void main() {
+  vec2 fragCoord = gl_FragCoord.xy;
+  if (iFlipX > 0.5) fragCoord.x = iResolution.x - fragCoord.x;
+  if (iFlipY > 0.5) fragCoord.y = iResolution.y - fragCoord.y;
+
+  vec2 coord = vec2(fragCoord.x, iResolution.y - fragCoord.y);
+  vec2 rayPos = vec2(iResolution.x * 1.1, -0.5 * iResolution.y);
+
+  float tiltRad = iTilt * 3.14159265 / 180.0;
+  float cs = cos(tiltRad);
+  float sn = sin(tiltRad);
+  vec2 rel = coord - rayPos;
+  vec2 tiltedCoord = vec2(rel.x * cs - rel.y * sn, rel.x * sn + rel.y * cs) + rayPos;
+
+  float halfSpread = iSpread * 0.275;
+  vec2 rayRefDir1 = normalize(vec2(cos(0.785398 + halfSpread), sin(0.785398 + halfSpread)));
+  vec2 rayRefDir2 = normalize(vec2(cos(0.785398 - halfSpread), sin(0.785398 - halfSpread)));
+
+  vec4 rays1 = vec4(iRayColor1, 1.0) * rayStrength(rayPos, rayRefDir1, tiltedCoord, 36.2214, 21.11349, iSpeed);
+  vec4 rays2 = vec4(iRayColor2, 1.0) * rayStrength(rayPos, rayRefDir2, tiltedCoord, 22.3991, 18.0234, iSpeed * 0.2);
+
+  vec4 color = rays1 * (1.0 - iBlend) * 0.9 + rays2 * iBlend * 0.9;
+
+  float distanceToLight = length(fragCoord.xy - vec2(rayPos.x, iResolution.y - rayPos.y)) / iResolution.y;
+  float brightness = iIntensity * 0.4 / pow(max(distanceToLight, 0.001), iFalloff);
+  color.rgb *= brightness;
+
+  float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+  color.rgb = mix(vec3(gray), color.rgb, iSaturation);
+
+  color.a = max(color.r, max(color.g, color.b)) * iOpacity;
+  gl_FragColor = color;
+}`;
+
+      const [flipX, flipY] = originToFlip(origin);
+      const uniforms = {
+        iTime: { value: 0 },
+        iResolution: { value: [1, 1] },
+        iSpeed: { value: speed },
+        iRayColor1: { value: hexToRgb(rayColor1) },
+        iRayColor2: { value: hexToRgb(rayColor2) },
+        iIntensity: { value: intensity },
+        iSpread: { value: spread },
+        iFlipX: { value: flipX },
+        iFlipY: { value: flipY },
+        iTilt: { value: tilt },
+        iSaturation: { value: saturation },
+        iBlend: { value: blend },
+        iFalloff: { value: falloff },
+        iOpacity: { value: opacity }
+      };
+      uniformsRef.current = uniforms;
+
+      const geometry = new Triangle(gl);
+      const program = new Program(gl, { vertex: vert, fragment: frag, uniforms });
+      const mesh = new Mesh(gl, { geometry, program });
+      meshRef.current = mesh;
+
+      const updateSize = () => {
+        if (!containerRef.current || !renderer) return;
+        renderer.dpr = Math.min(window.devicePixelRatio, 2);
+        const { clientWidth: w, clientHeight: h } = containerRef.current;
+        renderer.setSize(w, h);
+        uniforms.iResolution.value = [w * renderer.dpr, h * renderer.dpr];
+      };
+
+      const loop = t => {
+        if (!rendererRef.current || !uniformsRef.current || !meshRef.current) return;
+        uniforms.iTime.value = t * 0.001;
+        try {
+          renderer.render({ scene: mesh });
+          animationIdRef.current = requestAnimationFrame(loop);
+        } catch (e) {
+          return;
+        }
+      };
+
+      window.addEventListener('resize', updateSize);
+      updateSize();
+      animationIdRef.current = requestAnimationFrame(loop);
+
+      cleanupFunctionRef.current = () => {
+        if (animationIdRef.current) {
+          cancelAnimationFrame(animationIdRef.current);
+          animationIdRef.current = null;
+        }
+        window.removeEventListener('resize', updateSize);
+        if (renderer) {
+          try {
+            const loseCtx = renderer.gl.getExtension('WEBGL_lose_context');
+            if (loseCtx) loseCtx.loseContext();
+            const canvas = renderer.gl.canvas;
+            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+          } catch (e) {}
+        }
+        rendererRef.current = null;
+        uniformsRef.current = null;
+        meshRef.current = null;
+      };
+    };
+
+    initializeWebGL();
+
+    return () => {
+      if (cleanupFunctionRef.current) {
+        cleanupFunctionRef.current();
+        cleanupFunctionRef.current = null;
+      }
+    };
+  }, [isVisible, speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity]);
+
+  useEffect(() => {
+    if (!uniformsRef.current) return;
+    const u = uniformsRef.current;
+    u.iSpeed.value = speed;
+    u.iRayColor1.value = hexToRgb(rayColor1);
+    u.iRayColor2.value = hexToRgb(rayColor2);
+    u.iIntensity.value = intensity;
+    u.iSpread.value = spread;
+    const [flipX, flipY] = originToFlip(origin);
+    u.iFlipX.value = flipX;
+    u.iFlipY.value = flipY;
+    u.iTilt.value = tilt;
+    u.iSaturation.value = saturation;
+    u.iBlend.value = blend;
+    u.iFalloff.value = falloff;
+    u.iOpacity.value = opacity;
+  }, [speed, rayColor1, rayColor2, intensity, spread, origin, tilt, saturation, blend, falloff, opacity]);
+
+  return <div ref={containerRef} className={`side-rays-container ${className}`.trim()} />;
+};
+
+const MaskedHeading = ({ tagline }) => (
+  <h1 className="font-extrabold tracking-tight leading-[1.05] text-center">
+    <img
+      src={IMG.logoBlanco}
+      alt="Green Fire"
+      className="mx-auto h-14 sm:h-16 md:h-24 lg:h-28 w-auto drop-shadow-[0_0_6px_rgba(143,224,180,0.25)]"
+    />
+    <span className="font-display font-bold block mt-5 md:mt-7 text-lg sm:text-2xl md:text-3xl lg:text-4xl tracking-normal text-white/90">
+      {tagline}
+    </span>
+  </h1>
+);
+
+/* ---------------------------------------------------------
+   HERO (Inicio) — full viewport, rayos WebGL (OGL) de fondo + título
+--------------------------------------------------------- */
+
+const Hero = () => {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.defaultMuted = true;
+    const playPromise = v.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+  }, []);
+
+  return (
+    <section
+      className="relative w-full h-screen overflow-hidden flex items-center justify-center"
+      style={{
+        background: "linear-gradient(135deg, #1A312B 0%, #29683D 55%, #00AE4C 100%)",
+      }}
+    >
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-cover"
+        src={HERO_VIDEO}
+        poster={HERO_VIDEO_POSTER}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+      />
+      <div
+        className="absolute bottom-0 inset-x-0 h-40 md:h-64 pointer-events-none"
+        style={{
+          background: "linear-gradient(180deg, rgba(26,49,43,0) 0%, #1A312B 100%)",
+        }}
+      />
+      <div
+        className="relative z-10 px-6 max-w-5xl mx-auto"
+        style={{ textShadow: "0 2px 24px rgba(0,0,0,0.45)" }}
+      >
+        <MaskedHeading tagline="SUSTRATOS Y TECNOLOGÍA PARA CULTIVOS" />
+      </div>
+    </section>
+  );
+};
+
+/* ---------------------------------------------------------
+   QUIÉNES SOMOS (Inicio)
+--------------------------------------------------------- */
+
+const NOSOTROS_STORY = [
+  {
+    eyebrow: "",
+    mainWord: "",
+    accentWord: "",
+    paragraphs: [
+      "En Greenfire, somos productores y distribuidores de sustratos especializados en champicompost; e importadores de luminarias para cultivos.",
+    ],
+    image: null,
+    badge: "Green Fire team",
+  },
+  {
+    eyebrow: "Nuestros productos",
+    mainWord: "Tu mejor",
+    accentWord: "aliado",
+    paragraphs: [
+      "Ofrecemos sustratos de alta calidad, con fórmulas propias e innovadoras para el cultivo urbano, con representación nacional a través de nuestros distribuidores, además de todo lo necesario para tu cultivo.",
+    ],
+    image: null,
+    badge: "Tienda de cultivo",
+  },
+];
+
+const NOSOTROS_STATS = [
+  { value: "+7", label: "años cuidando cultivos" },
+  { value: "3", label: "sucursales" },
+  { value: "100%", label: "sustratos propios" },
+];
+
+const QuienesSomos = () => (
+  <section className="relative bg-deep overflow-hidden">
+    <div className="absolute inset-0 opacity-70">
+      <SideRays
+        speed={1.4}
+        rayColor1="#EAB308"
+        rayColor2="#10B981"
+        intensity={1.4}
+        spread={2.4}
+        origin="top-left"
+        tilt={0}
+        saturation={1.3}
+        blend={0.7}
+        falloff={1.8}
+        opacity={0.6}
+      />
+    </div>
+
+    <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-24">
+      <span className="text-xs font-semibold uppercase tracking-wider text-[#3ED17A]">Green Fire</span>
+      <h2 className="mt-3 font-bold text-3xl md:text-5xl text-white leading-tight max-w-2xl">
+        Expertos en sustratos y abonos para tu jardín.
+      </h2>
+
+      <div className="mt-10 md:mt-12 flex flex-wrap gap-10 md:gap-16">
+        {NOSOTROS_STATS.map((s) => (
+          <div key={s.label}>
+            <p className="font-accent italic text-4xl text-[#3ED17A]">{s.value}</p>
+            <p className="text-sm text-white/50">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <h3 className="mt-16 md:mt-24 font-bold text-3xl md:text-5xl text-white leading-tight border-t border-white/10 pt-12 md:pt-16">
+        Sobre nosotros
+      </h3>
+
+      <div className="mt-6 md:mt-8 space-y-16 md:space-y-4">
+        {NOSOTROS_STORY.map((item, i) => (
+          <div
+            key={item.badge}
+            className={
+              "grid md:grid-cols-2 gap-8 md:gap-16 items-start pb-8 md:pb-12 " +
+              (item.mainWord ? "pt-8 md:pt-12 " : "pt-0 ") +
+              (i > 0 ? "md:border-t border-white/10" : "")
+            }
+          >
+            <div className={i % 2 === 1 ? "md:order-2" : ""}>
+              {(item.eyebrow || item.mainWord) && (
+                <>
+                  <span className="text-sm font-semibold text-brand/70">0{i + 1}</span>
+                  {item.eyebrow && (
+                    <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-white/40">
+                      {item.eyebrow}
+                    </span>
+                  )}
+                </>
+              )}
+              {item.mainWord && (
+                <h3 className="mt-2 text-4xl md:text-5xl leading-none text-white">
+                  <span className="font-bold">{item.mainWord}</span>{" "}
+                  <span className="font-accent italic font-normal">{item.accentWord}</span>
+                </h3>
+              )}
+              <div className="mt-4 space-y-3 text-white/60 leading-relaxed text-[15px] md:text-base max-w-md">
+                {item.paragraphs.map((p, pi) => (
+                  <p key={pi}>{p}</p>
+                ))}
+              </div>
+              <span className="mt-5 inline-block text-xs font-semibold uppercase tracking-wide rounded-full px-3 py-1.5 text-brand bg-brand/15">
+                {item.badge}
+              </span>
+            </div>
+
+            <div className={i % 2 === 1 ? "md:order-1" : ""}>
+              <div className="blob-shape aspect-square overflow-hidden mx-auto max-w-sm bg-forest flex items-center justify-center">
+                {item.image ? (
+                  <img src={item.image} alt={item.badge} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xs font-semibold uppercase tracking-wide text-white/30">Foto próximamente</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+/* ---------------------------------------------------------
+   INTRO DE PÁGINA (banner oscuro reutilizable para páginas
+   institucionales: Sustratos, Lámparas)
+--------------------------------------------------------- */
+
+const PageIntro = ({ eyebrow, title, description }) => (
+  <section className="bg-deep">
+    <div className="max-w-7xl mx-auto px-5 md:px-8 py-14 md:py-20">
+      <span className="text-xs font-semibold uppercase tracking-wider text-white/60">{eyebrow}</span>
+      <h1 className="mt-3 font-extrabold text-3xl md:text-5xl text-white leading-tight max-w-3xl">{title}</h1>
+      {description && (
+        <p className="mt-4 text-white/70 max-w-2xl text-base md:text-lg leading-relaxed">{description}</p>
+      )}
+    </div>
+  </section>
+);
+
+/* ---------------------------------------------------------
+   SUSTRATOS — bloque alternado imagen/texto reutilizable
+--------------------------------------------------------- */
+
+const productToStoryItem = (id, { badge } = {}) => {
+  const p = PRODUCTS.find((x) => x.id === id);
+  const [mainWord, ...rest] = p.name.split(" ");
+  return {
+    eyebrow: p.lineLabel,
+    mainWord,
+    accentWord: rest.join(" "),
+    paragraphs: [p.longDescription],
+    image: p.image ? IMG[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase()) + "Cut"] : null,
+    placeholderLabel: p.name,
+    badge: badge || p.lineLabel,
+    size: p.size,
+    accentColor: p.accent,
+  };
+};
+
+const SUSTRATOS_STORY = [
+  {
+    eyebrow: "ChampiCompost",
+    mainWord: "Champi",
+    accentWord: "Compost",
+    paragraphs: [
+      "En Green Fire desarrollamos el ChampiCompost, una enmienda orgánica premium elaborada a partir de residuos seleccionados de la producción de champiñones y portobelos. Mediante un proceso de compostaje controlado durante 6 a 9 meses, logramos transformar estos materiales en un producto estable, nutritivo y de altísima calidad.",
+      "El resultado es un compost equilibrado, rico en materia orgánica y microorganismos benéficos, que actúa como la base de la mayoría de nuestras recetas de sustratos.",
+    ],
+    image: IMG.champicompostCut,
+    badge: "Base de nuestras recetas",
+    accentColor: "#2A673D",
+  },
+  {
+    eyebrow: "Línea Industrial",
+    mainWord: "Línea",
+    accentWord: "Industrial",
+    paragraphs: [
+      "El Industrial Liviano de Green Fire es un sustrato diseñado especialmente para quienes buscan volumen, practicidad y una mezcla equilibrada para distintos tipos de cultivos. Su fórmula combina nuestro exclusivo ChampiCompost con materias primas seleccionadas como perlita, turba y otros componentes que aseguran un sustrato aireado, liviano y de excelente drenaje.",
+      "Gracias a su presentación en bolsas de 80 dm³, es ideal para proyectos de gran escala, invernaderos, viveros y productores que necesitan rendimiento y consistencia lote tras lote.",
+    ],
+    image: IMG.industrialMainCut,
+    badge: "Gran escala",
+    size: "Bolsa 80 dm³",
+    accentColor: "#7C8B7F",
+  },
+  productToStoryItem("grow-light", { badge: "100% orgánico" }),
+  productToStoryItem("huertero-plus", { badge: "100% orgánico" }),
+  productToStoryItem("premium-mix", { badge: "100% orgánico" }),
+  productToStoryItem("coco-fire", { badge: "Fibra de coco" }),
+  {
+    eyebrow: "Línea Inerte",
+    mainWord: "Coco",
+    accentWord: "Elite",
+    paragraphs: [
+      "Sustrato inerte pensado para quienes quieren control total sobre la nutrición de sus plantas: el aliado ideal para producción con fertilizantes. La versión base de la línea.",
+    ],
+    image: null,
+    placeholderLabel: "Coco Elite",
+    badge: "70% fibra de coco + 30% perlita",
+    accentColor: "#3E6E52",
+  },
+  {
+    eyebrow: "Línea Inerte",
+    mainWord: "Coco Elite",
+    accentWord: "Plus",
+    paragraphs: [
+      "La versión superior de la línea: máxima pureza para quienes buscan el control más preciso sobre la nutrición, fertirriego a fertirriego.",
+    ],
+    image: null,
+    placeholderLabel: "Coco Elite Plus",
+    badge: "100% fibra de coco",
+    accentColor: "#3E6E52",
+  },
+];
+
+const SustratosStory = () => (
+  <section className="relative bg-deep overflow-hidden">
+    <div className="absolute inset-0 opacity-70">
+      <SideRays
+        speed={1.4}
+        rayColor1="#EAB308"
+        rayColor2="#10B981"
+        intensity={1.4}
+        spread={2.4}
+        origin="top-left"
+        tilt={0}
+        saturation={1.3}
+        blend={0.7}
+        falloff={1.8}
+        opacity={0.6}
+      />
+    </div>
+
+    <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-24">
+      <span className="text-xs font-semibold uppercase tracking-wider text-brand/80">Nuestras líneas</span>
+      <h2 className="mt-3 font-bold text-3xl md:text-5xl text-white leading-tight">
+        Cada sustrato, <span className="font-accent italic font-normal text-white/90">su propia historia</span>
+      </h2>
+      <p className="mt-5 max-w-2xl text-white/60 leading-relaxed text-[15px] md:text-base">
+        Fabricación propia, hecha con ChampiCompost. Conocé cada línea antes de elegir la tuya en el catálogo.
+      </p>
+
+      <div className="mt-16 md:mt-24 space-y-16 md:space-y-4">
+        {SUSTRATOS_STORY.map((item, i) => (
+          <div
+            key={item.mainWord + item.accentWord}
+            className={
+              "grid md:grid-cols-2 gap-8 md:gap-16 items-center py-8 md:py-12 " +
+              (i > 0 ? "md:border-t border-white/10" : "")
+            }
+          >
+            <div className={i % 2 === 1 ? "md:order-2" : ""}>
+              <span className="text-sm font-semibold text-brand/70">0{i + 1}</span>
+              <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-white/40">
+                {item.eyebrow}
+              </span>
+              <h3 className="mt-2 text-4xl md:text-5xl leading-none text-white">
+                <span className="font-bold">{item.mainWord}</span>{" "}
+                <span className="font-accent italic font-normal">{item.accentWord}</span>
+              </h3>
+              <div className="mt-4 space-y-3 text-white/60 leading-relaxed text-[15px] md:text-base max-w-md">
+                {item.paragraphs.map((p, pi) => (
+                  <p key={pi}>{p}</p>
+                ))}
+              </div>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <span
+                  className="text-xs font-semibold uppercase tracking-wide rounded-full px-3 py-1.5"
+                  style={{ color: item.accentColor, backgroundColor: item.accentColor + "22" }}
+                >
+                  {item.badge}
+                </span>
+                {item.size && (
+                  <span className="text-xs font-semibold uppercase tracking-wide text-white/50">{item.size}</span>
+                )}
+              </div>
+            </div>
+
+            <div className={i % 2 === 1 ? "md:order-1" : ""}>
+              <TiltBox
+                className="blob-shape aspect-square overflow-hidden mx-auto max-w-sm"
+                style={{ backgroundColor: item.accentColor + "1a" }}
+                tiltMax={8}
+                tiltScale={1.03}
+              >
+                {item.image ? (
+                  <img
+                    src={item.image}
+                    alt={item.mainWord + " " + item.accentWord}
+                    className="w-full h-full object-contain p-10"
+                  />
+                ) : (
+                  <ProductPlaceholder label={item.placeholderLabel} accent={item.accentColor} />
+                )}
+              </TiltBox>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+/* ---------------------------------------------------------
+   PÁGINA: SUSTRATOS (institucional, sin precios ni compra)
+--------------------------------------------------------- */
+
+const SustratosPage = () => (
+  <div>
+    <PageIntro
+      eyebrow="Sustratos"
+      title="Nuestra línea completa de sustratos"
+      description="Fabricación propia, hecha con ChampiCompost. Conocé la historia de cada línea antes de elegir la tuya en el catálogo."
+    />
+
+    <SustratosStory />
+  </div>
+);
+
+/* ---------------------------------------------------------
+   PÁGINA: LÁMPARAS (institucional, sin precios ni compra)
+--------------------------------------------------------- */
+
+const LAMPARA_STORY = [
+  {
+    eyebrow: "Silver 2.1",
+    mainWord: "Diseño",
+    accentWord: "robusto",
+    paragraphs: [
+      "Cuerpo de aluminio plegable con brazos LED regulables y anclajes con poleas de crique, pensado para instalarse en minutos y ajustarse a la altura exacta del cultivo en cualquier etapa.",
+    ],
+    image: IMG.lampDetalle,
+    badge: "3 años de garantía",
+  },
+  {
+    eyebrow: "Silver 2.1",
+    mainWord: "Full",
+    accentWord: "Cycle",
+    paragraphs: [
+      "Chips Samsung LM301H Evo Mint White con espectro completo (3000K, 5000K, Mint White + Deep Red, Blue, UV e IR), pensados específicamente para horticultura: acompañan crecimiento y floración con una única lámpara.",
+    ],
+    image: IMG.lampAbierta,
+    badge: "Espectro completo",
+  },
+];
+
+const LamparaStory = () => (
+  <section className="relative bg-deep overflow-hidden">
+    <div className="absolute inset-0 opacity-70">
+      <SideRays
+        speed={1.4}
+        rayColor1="#EAB308"
+        rayColor2="#10B981"
+        intensity={1.4}
+        spread={2.4}
+        origin="top-right"
+        tilt={0}
+        saturation={1.3}
+        blend={0.7}
+        falloff={1.8}
+        opacity={0.6}
+      />
+    </div>
+
+    <div className="relative z-10 max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-24">
+      <span className="text-xs font-semibold uppercase tracking-wider text-brand/80">GreenFire Silver 2.1</span>
+      <h2 className="mt-3 font-bold text-3xl md:text-5xl text-white leading-tight">
+        Máxima eficiencia, <span className="font-accent italic font-normal text-white/90">todo el ciclo</span>
+      </h2>
+
+      <div className="mt-16 md:mt-24 space-y-16 md:space-y-4">
+        {LAMPARA_STORY.map((item, i) => (
+          <div
+            key={item.mainWord}
+            className={
+              "grid md:grid-cols-2 gap-8 md:gap-16 items-center py-8 md:py-12 " +
+              (i > 0 ? "md:border-t border-white/10" : "")
+            }
+          >
+            <div className={i % 2 === 1 ? "md:order-2" : ""}>
+              <span className="text-sm font-semibold text-brand/70">0{i + 1}</span>
+              <span className="ml-3 text-xs font-semibold uppercase tracking-wider text-white/40">
+                {item.eyebrow}
+              </span>
+              <h3 className="mt-2 text-4xl md:text-5xl leading-none text-white">
+                <span className="font-bold">{item.mainWord}</span>{" "}
+                <span className="font-accent italic font-normal">{item.accentWord}</span>
+              </h3>
+              <div className="mt-4 space-y-3 text-white/60 leading-relaxed text-[15px] md:text-base max-w-md">
+                {item.paragraphs.map((p, pi) => (
+                  <p key={pi}>{p}</p>
+                ))}
+              </div>
+              <span className="mt-5 inline-block text-xs font-semibold uppercase tracking-wide rounded-full px-3 py-1.5 text-brand bg-brand/15">
+                {item.badge}
+              </span>
+            </div>
+
+            <div className={i % 2 === 1 ? "md:order-1" : ""}>
+              <div className="blob-shape aspect-square overflow-hidden mx-auto max-w-sm bg-forest">
+                <img src={item.image} alt={item.mainWord + " " + item.accentWord} className="w-full h-full object-cover" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+const LamparasPage = () => (
+  <div>
+    <PageIntro
+      eyebrow="Lámparas"
+      title="GreenFire Silver 2.1 — 720W Full Cycle LED"
+      description="La Silver 2.1 es la nueva lámpara LED profesional de GreenFire, diseñada para entregar máxima eficiencia y un espectro optimizado para todo el ciclo de cultivo indoor."
+    />
+
+    <LamparaStory />
+
+    <section className="bg-forest">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-20">
+        <span className="text-xs font-semibold uppercase tracking-wider text-brand/80">Características principales</span>
+        <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {LAMPARA_FEATURES.map((f, i) => (
+            <div key={i} className="flex items-start gap-3 bg-deep/40 rounded-2xl p-5">
+              <span className="shrink-0 w-8 h-8 rounded-full bg-brand/20 text-brand flex items-center justify-center">
+                <CheckIcon className="w-4 h-4" />
+              </span>
+              <p className="text-sm text-white/70 leading-relaxed">{f}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section className="bg-deep">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-20">
+        <span className="text-xs font-semibold uppercase tracking-wider text-brand/80">Ficha técnica</span>
+        <div className="mt-6 flex gap-5 overflow-x-auto no-scrollbar pb-2 snap-x snap-mandatory">
+          {LAMPARA_GALLERY.map((g, i) => (
+            <div
+              key={i}
+              className="shrink-0 w-[78%] sm:w-[380px] snap-center rounded-3xl overflow-hidden bg-forest border border-white/10 shadow-sm"
+            >
+              <img src={g.src} alt={g.alt} className="w-full h-[420px] object-cover" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section className="bg-forest">
+      <div className="max-w-4xl mx-auto px-5 md:px-8 py-14 md:py-16 text-center">
+        <p className="text-xl md:text-2xl leading-relaxed">
+          <span className="font-bold text-white">GreenFire Silver 2.1</span>{" "}
+          <span className="font-accent italic font-normal text-white/80">
+            espectro balanceado con penetración superior
+          </span>
+          <span className="font-bold text-white">, rendimiento asegurado en todo el ciclo.</span>
+        </p>
+      </div>
+    </section>
+  </div>
+);
+
+/* ---------------------------------------------------------
+   SUCURSALES
+--------------------------------------------------------- */
+
+const Sucursales = () => (
+  <section className="bg-[#F4F7F5]">
+    <div className="max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-24">
+      <div className="max-w-xl">
+        <span className="text-xs font-semibold uppercase tracking-wider text-brand">Sucursales</span>
+        <h2 className="mt-3 font-extrabold text-3xl md:text-4xl text-deep leading-tight">
+          Encontranos cerca tuyo
+        </h2>
+        <p className="mt-4 text-deep/65">
+          Pasá, contanos qué estás cultivando y te ayudamos a elegir. Estos son datos
+          de ejemplo para el prototipo.
+        </p>
+      </div>
+
+      <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {BRANCHES.map((b) => (
+          <div
+            key={b.name}
+            className="bg-white rounded-2xl p-6 border border-deep/5 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="w-11 h-11 rounded-full bg-brand/10 text-brand flex items-center justify-center mb-4">
+              <LeafIcon className="w-5 h-5" />
+            </div>
+            <h3 className="font-bold text-lg text-deep">{b.name}</h3>
+            <p className="mt-3 flex items-start gap-2 text-sm text-deep/65">
+              <PinIcon className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
+              {b.address}
+            </p>
+            <p className="mt-2 flex items-start gap-2 text-sm text-deep/65">
+              <ClockIcon className="w-4 h-4 mt-0.5 shrink-0 text-brand" />
+              {b.hours}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+/* ---------------------------------------------------------
+   CATÁLOGO
+--------------------------------------------------------- */
+
+const ProductCard = ({ product, onAdd, onOpen }) => {
+  const [variant, setVariant] = useState(product.variants ? product.variants[0] : null);
+  const price = variant ? variant.price : product.price;
+  const name = variant ? variant.label : product.name;
+
+  return (
+    <div className="bg-forest rounded-3xl p-4 flex flex-col h-full">
+      <TiltBox
+        as="button"
+        onClick={() => onOpen(product)}
+        className="relative rounded-2xl bg-white/95 aspect-square overflow-hidden flex items-center justify-center"
+        tiltMax={10}
+        tiltScale={1.05}
+      >
+        {product.image ? (
+          <img
+            src={product.image}
+            alt={name}
+            className="w-full h-full object-contain p-3"
+          />
+        ) : (
+          <ProductPlaceholder label={product.placeholderLabel || product.name} accent={product.accent} />
+        )}
+        {!product.image && (
+          <span className="absolute top-2 right-2 bg-deep/80 text-white text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-1">
+            Imagen ilustrativa
+          </span>
+        )}
+      </TiltBox>
+
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        {(product.badges || []).map((b) => (
+          <span key={b} className="text-[10px] font-semibold uppercase tracking-wide text-white/70 bg-white/10 rounded-full px-2 py-1">
+            {b}
+          </span>
+        ))}
+      </div>
+
+      <h3 className="mt-3 font-bold text-white text-lg leading-snug">{name}</h3>
+      {product.lineLabel && (
+        <p className="text-white/50 text-xs font-medium mt-0.5">{product.lineLabel}</p>
+      )}
+      <p className="mt-2 text-white/70 text-sm leading-relaxed line-clamp-3">{product.description}</p>
+
+      {product.variants && (
+        <div className="mt-3 flex gap-2">
+          {product.variants.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setVariant(v)}
+              className={
+                "text-xs font-semibold rounded-full px-3 py-1.5 border transition-colors " +
+                (variant.key === v.key
+                  ? "bg-brand border-brand text-white"
+                  : "border-white/25 text-white/70 hover:border-white/50")
+              }
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-auto pt-5 flex items-end justify-between">
+        <div>
+          <p className="text-white/50 text-xs">{product.size}</p>
+          <p className="text-white font-extrabold text-xl mt-0.5">{formatPrice(price)}</p>
+        </div>
+        <button
+          onClick={() => onAdd(product, variant)}
+          className="bg-white hover:bg-brand hover:text-white text-deep font-semibold text-sm rounded-full px-4 py-2.5 transition-colors"
+        >
+          Agregar
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ProductModal = ({ product, onClose, onAdd }) => {
+  const [variant, setVariant] = useState(product.variants ? product.variants[0] : null);
+  const price = variant ? variant.price : product.price;
+  const name = variant ? variant.label : product.name;
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-deep/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto grid sm:grid-cols-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="bg-forest sm:rounded-l-3xl p-6 flex items-center justify-center aspect-square sm:aspect-auto">
+          <TiltBox
+            className="w-full h-full rounded-2xl bg-white/95 flex items-center justify-center overflow-hidden"
+            tiltMax={8}
+            tiltScale={1.03}
+          >
+            {product.image ? (
+              <img src={product.image} alt={name} className="w-full h-full object-contain p-4" />
+            ) : (
+              <ProductPlaceholder label={product.placeholderLabel || product.name} accent={product.accent} />
+            )}
+          </TiltBox>
+        </div>
+        <div className="p-6 md:p-8 flex flex-col">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-brand">{product.category}</span>
+              <h3 className="mt-1 font-extrabold text-2xl text-deep leading-tight">{name}</h3>
+            </div>
+            <button onClick={onClose} className="text-deep/40 hover:text-deep p-1 shrink-0">
+              <CloseIcon className="w-6 h-6" />
+            </button>
+          </div>
+
+          <p className="mt-4 text-deep/70 leading-relaxed text-[15px]">
+            {product.longDescription || product.description}
+          </p>
+
+          {product.variants && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-2">Elegí una versión</p>
+              <div className="flex gap-2">
+                {product.variants.map((v) => (
+                  <button
+                    key={v.key}
+                    onClick={() => setVariant(v)}
+                    className={
+                      "text-sm font-semibold rounded-full px-4 py-2 border transition-colors " +
+                      (variant.key === v.key
+                        ? "bg-brand border-brand text-white"
+                        : "border-deep/15 text-deep/70 hover:border-brand/50")
+                    }
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              {variant.note && <p className="mt-2 text-xs text-deep/50">{variant.note}</p>}
+            </div>
+          )}
+
+          <div className="mt-auto pt-6 flex items-end justify-between">
+            <div>
+              <p className="text-deep/50 text-xs">{product.size}</p>
+              <p className="text-deep font-extrabold text-2xl mt-0.5">{formatPrice(price)}</p>
+            </div>
+            <button
+              onClick={() => {
+                onAdd(product, variant);
+                onClose();
+              }}
+              className="bg-brand hover:bg-deep text-white font-semibold rounded-full px-6 py-3 transition-colors"
+            >
+              Agregar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Catalogo = ({ onAdd }) => {
+  const [activeCategory, setActiveCategory] = useState("Sustratos");
+  const [openProduct, setOpenProduct] = useState(null);
+
+  const filtered = useMemo(
+    () => PRODUCTS.filter((p) => p.category === activeCategory),
+    [activeCategory]
+  );
+
+  return (
+    <section className="bg-white">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-24">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-brand">Catálogo</span>
+            <h2 className="mt-3 font-extrabold text-3xl md:text-4xl text-deep leading-tight">
+              Todo lo que tu cultivo necesita
+            </h2>
+          </div>
+          <p className="text-deep/60 max-w-sm text-sm md:text-base">
+            Nuestra línea de <span className="text-brand font-semibold">Sustratos</span> es
+            fabricación propia, hecha con ChampiCompost.
+          </p>
+        </div>
+
+        <div className="mt-8 flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 md:mx-0 md:px-0 md:flex-wrap">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={
+                "shrink-0 whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold transition-colors border " +
+                (activeCategory === cat
+                  ? "bg-brand text-white border-brand"
+                  : "bg-white text-deep/70 border-deep/15 hover:border-brand/50")
+              }
+            >
+              {cat}
+              {cat === "Sustratos" && (
+                <span className="ml-1.5 text-[10px] font-bold align-middle">★</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((p) => (
+            <ProductCard key={p.id} product={p} onAdd={onAdd} onOpen={setOpenProduct} />
+          ))}
+        </div>
+      </div>
+
+      {openProduct && (
+        <ProductModal product={openProduct} onClose={() => setOpenProduct(null)} onAdd={onAdd} />
+      )}
+    </section>
+  );
+};
+
+/* ---------------------------------------------------------
+   CONTACTO
+--------------------------------------------------------- */
+
+const Contacto = () => {
+  const [sent, setSent] = useState(false);
+  return (
+    <section className="bg-[#F4F7F5]">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-16 md:py-24 grid md:grid-cols-2 gap-12">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-brand">Contacto</span>
+          <h2 className="mt-3 font-extrabold text-3xl md:text-4xl text-deep leading-tight">
+            ¿Hablamos de tu cultivo?
+          </h2>
+          <p className="mt-4 text-deep/65 max-w-md">
+            Escribinos y te ayudamos a elegir. Este formulario es parte del
+            prototipo, todavía no envía datos.
+          </p>
+          <div className="mt-8 space-y-3 text-sm text-deep/70">
+            <p><span className="font-semibold text-deep">WhatsApp:</span> +54 9 11 0000-0000</p>
+            <p><span className="font-semibold text-deep">Email:</span> hola@greenfire.com.ar</p>
+            <div className="flex gap-3 pt-2">
+              {["Instagram", "Facebook", "WhatsApp"].map((s) => (
+                <a
+                  key={s}
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  className="text-xs font-semibold uppercase tracking-wide bg-white border border-deep/10 rounded-full px-3 py-2 hover:border-brand/50 transition-colors"
+                >
+                  {s}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSent(true);
+          }}
+          className="bg-white rounded-3xl p-6 md:p-8 border border-deep/5 shadow-sm space-y-4"
+        >
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-deep/50">Nombre</label>
+            <input
+              type="text"
+              placeholder="Tu nombre"
+              className="mt-1.5 w-full rounded-xl border border-deep/15 px-4 py-3 text-sm focus:outline-none focus:border-brand"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-deep/50">Email</label>
+            <input
+              type="email"
+              placeholder="tu@email.com"
+              className="mt-1.5 w-full rounded-xl border border-deep/15 px-4 py-3 text-sm focus:outline-none focus:border-brand"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wide text-deep/50">Mensaje</label>
+            <textarea
+              rows="4"
+              placeholder="Contanos qué estás cultivando..."
+              className="mt-1.5 w-full rounded-xl border border-deep/15 px-4 py-3 text-sm focus:outline-none focus:border-brand"
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full bg-brand hover:bg-deep text-white font-semibold rounded-xl px-6 py-3.5 transition-colors"
+          >
+            {sent ? "¡Gracias, te contestamos pronto!" : "Enviar mensaje"}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+};
+
+/* ---------------------------------------------------------
+   FOOTER
+--------------------------------------------------------- */
+
+const Footer = ({ navigate }) => {
+  const handleClick = (e, href) => {
+    e.preventDefault();
+    navigate(href);
+  };
+  return (
+    <footer className="bg-deep text-white/70">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-14 grid sm:grid-cols-2 md:grid-cols-4 gap-10">
+        <div>
+          <img src={IMG.logoBlanco} alt="Green Fire" className="h-14 w-auto" />
+          <p className="mt-4 text-sm leading-relaxed max-w-xs">
+            Tu mejor aliado de siembra a cosecha. Sustratos propios, hechos con ChampiCompost.
+          </p>
+        </div>
+        <div>
+          <h4 className="text-white font-semibold text-sm mb-3">Navegación</h4>
+          <ul className="space-y-2 text-sm">
+            {NAV_LINKS.map((l) => (
+              <li key={l.href}>
+                <a href={l.href} onClick={(e) => handleClick(e, l.href)} className="hover:text-white transition-colors">
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-white font-semibold text-sm mb-3">Contacto</h4>
+          <ul className="space-y-2 text-sm">
+            <li>+54 9 11 0000-0000</li>
+            <li>hola@greenfire.com.ar</li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-white font-semibold text-sm mb-3">Redes</h4>
+          <ul className="space-y-2 text-sm">
+            {["Instagram", "Facebook", "WhatsApp"].map((s) => (
+              <li key={s}><a href="#" onClick={(e) => e.preventDefault()} className="hover:text-white transition-colors">{s}</a></li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-5 md:px-8 py-5 text-xs text-white/40 flex flex-col sm:flex-row gap-2 justify-between">
+          <span>© 2026 Green Fire SRL. Prototipo visual — no representa un sitio productivo.</span>
+          <span>Hecho con ChampiCompost 🌱</span>
+        </div>
+      </div>
+    </footer>
+  );
+};
+
+/* ---------------------------------------------------------
+   APP + ROUTER (estado de página activa, sin recarga)
+--------------------------------------------------------- */
+
+const ROUTES = ["/", "/sustratos", "/lamparas", "/catalogo", "/sucursales", "/contacto"];
+
+const getRouteFromLocation = () => {
+  try {
+    const p = window.location.pathname;
+    return ROUTES.indexOf(p) !== -1 ? p : "/";
+  } catch (e) {
+    return "/";
+  }
+};
+
+const App = () => {
+  const [route, setRoute] = useState(getRouteFromLocation);
+  const [cartCount, setCartCount] = useState(0);
+
+  const navigate = (path) => {
+    if (path === route) return;
+    try {
+      window.history.pushState({}, "", path);
+    } catch (e) {
+      // Bajo file:// (abierto con doble clic) pushState no está permitido
+      // fuera del archivo actual. Igual navegamos por estado en memoria.
+    }
+    setRoute(path);
+    window.scrollTo(0, 0);
+  };
+
+  useEffect(() => {
+    const onPopState = () => setRoute(getRouteFromLocation());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const handleAdd = (product, variant) => {
+    setCartCount((c) => c + 1);
+  };
+
+  let page;
+  if (route === "/sustratos") page = <SustratosPage />;
+  else if (route === "/lamparas") page = <LamparasPage />;
+  else if (route === "/catalogo") page = <Catalogo onAdd={handleAdd} />;
+  else if (route === "/sucursales") page = <Sucursales />;
+  else if (route === "/contacto") page = <Contacto />;
+  else
+    page = (
+      <>
+        <Hero />
+        <QuienesSomos />
+      </>
+    );
+
+  return (
+    <div className="min-h-screen">
+      <Navbar cartCount={cartCount} route={route} navigate={navigate} />
+      <div className={route === "/" ? "" : "pt-20 md:pt-24"}>{page}</div>
+      <Footer navigate={navigate} />
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<script>
+  (function () {
+    var source = document.getElementById("app-source").textContent;
+    try {
+      var output = Babel.transform(source, {
+        presets: [["react", { runtime: "classic" }]],
+        filename: "app.jsx",
+      }).code;
+      (0, eval)(output);
+    } catch (err) {
+      var root = document.getElementById("root");
+      root.innerHTML =
+        '<pre style="white-space:pre-wrap;padding:24px;color:#b91c1c;font-family:monospace;">' +
+        "Error al inicializar el prototipo:\n\n" +
+        String(err && err.stack ? err.stack : err) +
+        "</pre>";
+      console.error(err);
+    }
+  })();
+</script>
+</body>
+</html>

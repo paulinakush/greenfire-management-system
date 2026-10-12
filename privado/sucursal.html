@@ -1,0 +1,3461 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Green Fire | Sucursal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="shared/theme.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body class="bg-[#F4F7F5] text-deep antialiased">
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script src="shared/db.js"></script>
+<script src="shared/auth.js"></script>
+
+<script id="app-source" type="text/plain">
+/* ---------------------------------------------------------
+   UI COMPARTIDA (copia inline) — ver shared/ui.js, fuente
+   canónica de estos componentes. Se pega acá en texto plano
+   (en vez de cargarse por fetch) para que la página funcione
+   también abierta por doble clic (file://), igual que el
+   index.html público.
+--------------------------------------------------------- */
+
+const ROLE_LABELS = {
+  empleado_sucursal: "Empleado de sucursal",
+  responsable_sucursal: "Responsable de sucursal",
+  administrativo_fabrica: "Administrativo de fábrica",
+};
+
+const ESTADO_STYLES = {
+  pendiente: "bg-neutral/25 text-deep/70",
+  confirmado: "bg-institutional/15 text-institutional",
+  rechazado: "bg-red-100 text-red-700",
+  en_preparacion: "bg-amber-100 text-amber-700",
+  listo_retiro: "bg-sky-100 text-sky-700",
+  pendiente_envio: "bg-amber-100 text-amber-700",
+  finalizado: "bg-deep/10 text-deep/70",
+};
+
+const money = (n) =>
+  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
+
+const fmtDate = (iso) => {
+  if (!iso) return "-";
+  // Fechas "solo fecha" (YYYY-MM-DD) se arman en horario local: new Date(iso)
+  // las interpreta como medianoche UTC y en husos negativos (AR) muestran el
+  // día anterior.
+  const soloFecha = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = soloFecha ? new Date(`${iso}T00:00:00`) : new Date(iso);
+  return d.toLocaleDateString("es-AR");
+};
+
+const fmtDateTime = (iso) => {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return `${d.toLocaleDateString("es-AR")} ${d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`;
+};
+
+const enumLabel = (enumName, value) => {
+  const item = (window.GF_ENUMS[enumName] || []).find((e) => e.value === value);
+  return item ? item.label : value;
+};
+
+const exportCSV = (filename, columns, rows) => {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const header = columns.map((c) => esc(c.label)).join(",");
+  const lines = rows.map((r) => columns.map((c) => esc(c.csvValue ? c.csvValue(r) : c.searchValue ? c.searchValue(r) : r[c.key])).join(","));
+  const csv = [header, ...lines].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+/* ---------- Iconos SVG inline (mismo estilo que la interfaz pública) ---------- */
+
+const LeafIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M5 21c8 0 14-6 14-14V5h-2C9 5 5 11 5 19v2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M5 21c3-4 6-7 12-10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const MenuIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CloseIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const CheckIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 12.5l5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const AlertIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 3.5L22 20.5H2L12 3.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M12 10v4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <circle cx="12" cy="17.4" r="0.9" fill="currentColor" />
+  </svg>
+);
+
+const BoxIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M3 8l9-5 9 5-9 5-9-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M3 8v9l9 5 9-5V8M12 13v9" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+  </svg>
+);
+
+const TruckIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M2 7h11v9H2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M13 10h4l4 3.5V16h-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="6.5" cy="18" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+    <circle cx="17" cy="18" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+const ClipboardIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="5" y="4" width="14" height="17" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M9 4V3a1 1 0 011-1h4a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M8 11h8M8 15h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const CashIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="2.5" y="6" width="19" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const FactoryIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M3 21V11l5 3v-3l5 3V8l6 4v9H3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M6 21v-4M11 21v-4M16 21v-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+);
+
+const BeakerIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M9 3h6M10 3v6.5L4.8 18a2 2 0 001.7 3h11a2 2 0 001.7-3L14 9.5V3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M7 15h10" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+);
+
+const ChartIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M2 20h20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const UsersIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M16 6.5a3 3 0 010 5.8M20.5 20c0-2.6-1.8-4.8-4.2-5.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const LogoutIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const PlusIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const EyeIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const EditIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 20l.9-3.6L16.6 4.7a1.5 1.5 0 012.1 0l1.6 1.6a1.5 1.5 0 010 2.1L8.6 20.1 4 20z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M14.5 6.8l2.7 2.7" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const TrashIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const PowerIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M7 5.5a8 8 0 105.9-.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const PrinterIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 9V4h12v5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <rect x="4" y="9" width="16" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M6 14h12v6H6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+  </svg>
+);
+
+const DownloadIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const BellIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 10a6 6 0 1112 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+const DotsIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+  </svg>
+);
+
+const ChevronDownIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const SearchIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M20 20l-4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const ColumnsIcon = ({ className = "w-4 h-4" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M9 4v16M15 4v16" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+);
+
+const PlugIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path d="M9 3v5M15 3v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <path d="M6 8h12v3a6 6 0 01-12 0V8z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M12 17v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const IdCardIcon = ({ className = "w-5 h-5" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+    <circle cx="8.5" cy="11" r="1.8" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M5.5 15.5c.6-1.4 1.8-2 3-2s2.4.6 3 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <path d="M14 10h5M14 13h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const FlameIcon = ({ className = "w-6 h-6" }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path
+      d="M12 2.5c1.2 2.8-1.8 4.4-2.6 7-.5 1.7 0 3 1 3.8-1.4-.2-2.3-1.4-2.3-3 0-.8.2-1.4.5-2C6.7 9.8 5 12.3 5 15.2 5 19 8.1 22 12 22s7-3 7-6.8c0-2.6-1.3-4.8-3.3-6.2.4 1.6-.3 2.8-1.4 3.2-1 .4-1.9-.2-1.9-1.3 0-2.1 1.6-3.3 1.6-5.4 0-1.4-.8-2.7-2-3z"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/* ---------- Componentes base ---------- */
+
+const StatusPill = ({ estado }) => (
+  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${ESTADO_STYLES[estado] || "bg-neutral/25 text-deep/70"}`}>
+    {enumLabel("estado_pedido", estado)}
+  </span>
+);
+
+const PagoPill = ({ habilitado }) =>
+  habilitado ? (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-institutional/15 text-institutional">
+      <CheckIcon className="w-3.5 h-3.5" /> Pago habilitado
+    </span>
+  ) : (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-neutral/25 text-deep/50">
+      Pago no habilitado
+    </span>
+  );
+
+const Button = ({ variant = "primary", className = "", ...rest }) => {
+  const base = "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+  const variants = {
+    primary: "bg-institutional text-white hover:bg-medium",
+    secondary: "bg-white text-deep border border-deep/15 hover:border-deep/30",
+    danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50",
+    ghost: "text-deep/70 hover:bg-deep/5",
+  };
+  return <button className={`${base} ${variants[variant] || variants.primary} ${className}`} {...rest} />;
+};
+
+const Card = ({ className = "", children }) => (
+  <div className={`bg-white rounded-2xl border border-deep/8 shadow-sm ${className}`}>{children}</div>
+);
+
+const SectionBar = ({ eyebrowNumber, eyebrow, title, description, accent = "#00AE4C", action, search }) => (
+  <div className="mb-6 flex items-stretch gap-3">
+    <div className="w-1 rounded-full shrink-0" style={{ background: accent }} />
+    <div className="flex-1 min-w-0">
+      {eyebrow && (
+        <p className="font-accent italic text-lg text-institutional leading-none mb-1.5 flex items-baseline gap-2">
+          {eyebrowNumber && <span className="not-italic font-display font-bold text-xs text-deep/35 tracking-wider">{eyebrowNumber}</span>}
+          {eyebrow}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display font-bold text-2xl text-deep">{title}</h1>
+          {description && <p className="mt-1 text-sm text-deep/55">{description}</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          {search}
+          {action}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const EmptyState = ({ text }) => <div className="text-center py-12 text-sm text-deep/45">{text}</div>;
+
+const TableWrap = ({ children }) => <div className="overflow-x-auto rounded-2xl border border-deep/8">{children}</div>;
+
+const Toast = ({ message, kind = "success", onClose }) => {
+  if (!message) return null;
+  const styles = kind === "error" ? "bg-red-600" : "bg-institutional";
+  return (
+    <div className={`fixed bottom-5 right-5 z-50 ${styles} text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-3`}>
+      {message}
+      <button onClick={onClose} className="opacity-80 hover:opacity-100">
+        <CloseIcon className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
+
+const Modal = ({ open, onClose, title, children, wide }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-deep/50" onClick={onClose}>
+      <div
+        className={`bg-white rounded-2xl shadow-xl w-full ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-deep/8 sticky top-0 bg-white">
+          <h3 className="font-display font-bold text-lg text-deep">{title}</h3>
+          <button onClick={onClose} className="text-deep/40 hover:text-deep">
+            <CloseIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+const Field = ({ label, children }) => (
+  <label className="block">
+    <span className="block text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1.5">{label}</span>
+    {children}
+  </label>
+);
+
+const inputClass =
+  "w-full rounded-xl border border-deep/15 px-3.5 py-2.5 text-sm text-deep focus:outline-none focus:ring-2 focus:ring-institutional/40 focus:border-institutional";
+
+/* ---------- Topbar ---------- */
+
+const Topbar = ({ session, quickAccess, activeKey, onNavigate, notifCount, onLogout, onMenuClick }) => {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const iniciales = session.nombre
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-deep text-white flex items-center gap-3 px-4 md:px-6">
+      <button onClick={onMenuClick} className="p-2 -ml-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 md:hidden shrink-0" title="Menú">
+        <MenuIcon className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => onNavigate(session.rolNombre === "empleado_sucursal" ? "clientes" : "dashboard")}
+        title="Green Fire"
+        className="p-2.5 rounded-xl text-institutional hover:bg-white/10 transition-colors shrink-0"
+      >
+        <FlameIcon className="w-6 h-6" />
+      </button>
+      <div className="h-8 w-px bg-white/10 hidden md:block shrink-0" />
+
+      <nav className="hidden md:flex items-center gap-1 overflow-x-auto no-scrollbar">
+        {quickAccess.map((q) => {
+          const target = q.target || q.key;
+          return (
+            <button
+              key={q.key}
+              title={q.label}
+              onClick={() => onNavigate(target)}
+              className={`p-2.5 rounded-xl transition-colors shrink-0 ${
+                activeKey === target ? "bg-institutional text-white" : "text-white/55 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {q.icon}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="flex-1" />
+
+      <button className="relative p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 shrink-0" title="Notificaciones">
+        <BellIcon className="w-5 h-5" />
+        {notifCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">
+            {notifCount}
+          </span>
+        )}
+      </button>
+
+      {session.sucursalNombre && (
+        <span className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-full bg-white/10 text-xs font-semibold shrink-0 max-w-[160px] truncate">
+          {session.sucursalNombre}
+        </span>
+      )}
+
+      <div className="relative shrink-0">
+        <button onClick={() => setUserMenuOpen((v) => !v)} className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-full bg-institutional text-white text-xs font-bold flex items-center justify-center">{iniciales}</span>
+        </button>
+        {userMenuOpen && (
+          <div
+            className="absolute right-0 top-11 w-52 bg-white rounded-xl shadow-xl text-deep py-2 z-50"
+            onMouseLeave={() => setUserMenuOpen(false)}
+          >
+            <p className="px-3.5 py-1.5 text-sm font-semibold truncate">{session.nombre}</p>
+            <p className="px-3.5 pb-2 text-xs text-deep/50">{ROLE_LABELS[session.rolNombre]}</p>
+            <div className="border-t border-deep/8" />
+            <button onClick={onLogout} className="w-full text-left px-3.5 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+              <LogoutIcon className="w-4 h-4" /> Cerrar sesión
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
+
+/* ---------- Sidebar con acordeón ---------- */
+
+const Sidebar = ({ modules, activeKey, onNavigate, mobileOpen, onCloseMobile }) => {
+  const parentOfActive = modules.find((m) => m.children && m.children.some((c) => c.key === activeKey));
+  const [openKey, setOpenKey] = useState(parentOfActive ? parentOfActive.key : null);
+
+  const navigate = (key) => {
+    onNavigate(key);
+    onCloseMobile();
+  };
+
+  return (
+    <>
+      {mobileOpen && <div className="fixed inset-0 bg-deep/60 z-20 md:hidden" onClick={onCloseMobile} />}
+      <aside
+        className={`fixed top-16 left-0 bottom-0 w-64 bg-deep border-r border-white/5 overflow-y-auto py-4 z-30 transition-transform duration-200 md:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <nav className="px-3 space-y-1">
+          {modules.map((m) => {
+          if (m.children) {
+            const isOpen = openKey === m.key;
+            const childActive = m.children.some((c) => c.key === activeKey);
+            return (
+              <div key={m.key}>
+                <button
+                  onClick={() => setOpenKey(isOpen ? null : m.key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    childActive ? "text-institutional" : "text-white/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {m.icon}
+                  <span className="flex-1 text-left">{m.label}</span>
+                  <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                </button>
+                {isOpen && (
+                  <div className="mt-1 ml-4 pl-4 border-l border-white/10 space-y-0.5">
+                    {m.children.map((c) => {
+                      const active = activeKey === c.key;
+                      return (
+                        <button
+                          key={c.key}
+                          onClick={() => navigate(c.key)}
+                          className={`relative w-full flex items-center gap-2 pl-3 pr-2 py-2 rounded-lg text-sm text-left ${
+                            active ? "bg-institutional/15 text-institutional font-semibold" : "text-white/60 hover:text-white hover:bg-white/5"
+                          }`}
+                        >
+                          {active && <span className="absolute left-0 top-0 bottom-0 w-1 rounded-full bg-institutional" />}
+                          <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60 shrink-0" />
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          const active = activeKey === m.key;
+          return (
+            <button
+              key={m.key}
+              onClick={() => navigate(m.key)}
+              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                active ? "bg-institutional/15 text-institutional font-semibold" : "text-white/70 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-full bg-institutional" />}
+              {m.icon}
+              {m.label}
+            </button>
+          );
+          })}
+        </nav>
+      </aside>
+    </>
+  );
+};
+
+const PrivateShell = ({ session, modules, quickAccess, activeKey, onNavigate, notifCount = 0, onLogout, children }) => {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  return (
+    <div className="min-h-screen bg-[#F4F7F5]">
+      <Topbar
+        session={session}
+        quickAccess={quickAccess}
+        activeKey={activeKey}
+        onNavigate={onNavigate}
+        notifCount={notifCount}
+        onLogout={onLogout}
+        onMenuClick={() => setMobileNavOpen(true)}
+      />
+      <Sidebar
+        modules={modules}
+        activeKey={activeKey}
+        onNavigate={onNavigate}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+      />
+      <main className="pt-16 pl-0 md:pl-64 min-h-screen">
+        <div className="px-5 md:px-8 py-8 max-w-[1400px]">{children}</div>
+      </main>
+    </div>
+  );
+};
+
+/* ---------- Dashboard: KPIs, widgets, gráfico ---------- */
+
+const KpiCard = ({ icon, color = "#00AE4C", label, value }) => (
+  <Card className="p-5 flex items-center gap-4">
+    <span className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}1a`, color }}>
+      {icon}
+    </span>
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-deep/45">{label}</p>
+      <p className="text-2xl font-display font-bold text-deep truncate">{value}</p>
+    </div>
+  </Card>
+);
+
+const WidgetCard = ({ title, accent = "#00AE4C", footer, children }) => (
+  <Card className="overflow-hidden">
+    <div className="h-1" style={{ background: accent }} />
+    <div className="p-5">
+      <h3 className="font-display font-bold text-base text-deep mb-3">{title}</h3>
+      {children}
+    </div>
+    {footer && <div className="px-5 py-3 border-t border-deep/8">{footer}</div>}
+  </Card>
+);
+
+const CHART_RANGES = [
+  { key: "semana", label: "Última Semana" },
+  { key: "mes", label: "Último Mes" },
+  { key: "6meses", label: "Últimos 6 Meses" },
+];
+
+const SalesChart = ({ data, range, onRangeChange }) => {
+  const [hover, setHover] = useState(null);
+  const max = Math.max(1, ...data.map((d) => d.value));
+  const w = 640,
+    h = 220,
+    padTop = 16,
+    padBottom = 28,
+    padSide = 8,
+    barGap = 10;
+  const barW = data.length ? (w - padSide * 2 - barGap * (data.length - 1)) / data.length : 0;
+  const hasData = data.some((d) => d.value > 0);
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+        <h3 className="font-display font-bold text-base text-deep">Ventas por período</h3>
+        <div className="flex items-center gap-1 bg-deep/5 rounded-full p-1">
+          {CHART_RANGES.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => onRangeChange(r.key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                range === r.key ? "bg-institutional text-white" : "text-deep/60 hover:text-deep"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!hasData ? (
+        <EmptyState text="Todavía no hay ventas ni pedidos confirmados en este período." />
+      ) : (
+        <div className="relative">
+          <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-52" preserveAspectRatio="none">
+            {data.map((d, i) => {
+              const barH = Math.max(2, ((h - padTop - padBottom) * d.value) / max);
+              const x = padSide + i * (barW + barGap);
+              const y = h - padBottom - barH;
+              return (
+                <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((v) => (v === i ? null : v))}>
+                  <rect x={x} y={padTop} width={barW} height={h - padTop - padBottom} fill="transparent" />
+                  <rect x={x} y={y} width={barW} height={barH} rx={4} fill={hover === i ? "#29683D" : "#00AE4C"} />
+                  <text x={x + barW / 2} y={h - 8} textAnchor="middle" fontSize="9" fill="#1A312B" opacity="0.45">
+                    {d.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          {hover !== null && data[hover] && (
+            <div
+              className="absolute -translate-x-1/2 -translate-y-full bg-deep text-white text-xs rounded-lg px-2.5 py-1.5 pointer-events-none whitespace-nowrap"
+              style={{
+                left: `${((padSide + hover * (barW + barGap) + barW / 2) / w) * 100}%`,
+                top: `${((h - padBottom - Math.max(2, ((h - padTop - padBottom) * data[hover].value) / max)) / h) * 100}%`,
+              }}
+            >
+              {money(data[hover].value)}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+/* ---------- Patrón de listado: toolbar, filtros, tabla ---------- */
+
+const ListToolbar = ({ onNew, newLabel = "Nuevo", onExport, onPrint, extraActions }) => (
+  <div className="flex flex-wrap items-center gap-2 mb-4">
+    {onNew && (
+      <Button onClick={onNew}>
+        <PlusIcon /> {newLabel}
+      </Button>
+    )}
+    <div className="flex-1" />
+    {onExport && (
+      <Button variant="secondary" onClick={onExport}>
+        <DownloadIcon className="w-4 h-4" /> Exportar
+      </Button>
+    )}
+    {onPrint && (
+      <Button variant="secondary" onClick={onPrint}>
+        <PrinterIcon className="w-4 h-4" /> Imprimir
+      </Button>
+    )}
+    {extraActions}
+  </div>
+);
+
+const FiltersBar = ({ filters }) => {
+  if (!filters || filters.length === 0) return null;
+  return (
+    <div className="grid gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-4">
+      {filters.map((f, i) => (
+        <div key={i}>
+          <label className="block text-[11px] font-semibold uppercase tracking-wide text-deep/45 mb-1">{f.label}</label>
+          <select value={f.value} onChange={(e) => f.onChange(e.target.value)} className={inputClass}>
+            {f.options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const RowActions = ({ onView, onEdit, onDelete, deleteIcon: DeleteIcon = TrashIcon, deleteLabel = "Eliminar", onPrint, extra }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <div className="flex items-center gap-1 justify-end">
+      {onView && (
+        <button onClick={onView} title="Ver detalle" className="p-1.5 rounded-lg text-deep/50 hover:text-institutional hover:bg-institutional/10">
+          <EyeIcon />
+        </button>
+      )}
+      {onEdit && (
+        <button onClick={onEdit} title="Editar" className="p-1.5 rounded-lg text-deep/50 hover:text-institutional hover:bg-institutional/10">
+          <EditIcon />
+        </button>
+      )}
+      {onPrint && (
+        <button onClick={onPrint} title="Imprimir" className="p-1.5 rounded-lg text-deep/50 hover:text-institutional hover:bg-institutional/10">
+          <PrinterIcon />
+        </button>
+      )}
+      {onDelete && (
+        <button onClick={onDelete} title={deleteLabel} className="p-1.5 rounded-lg text-deep/50 hover:text-red-600 hover:bg-red-50">
+          <DeleteIcon />
+        </button>
+      )}
+      {extra && extra.length > 0 && (
+        <div className="relative">
+          <button onClick={() => setMenuOpen((v) => !v)} title="Otros" className="p-1.5 rounded-lg text-deep/50 hover:text-deep hover:bg-deep/5">
+            <DotsIcon />
+          </button>
+          {menuOpen && (
+            <div
+              className="absolute right-0 top-9 w-56 bg-white rounded-xl shadow-xl border border-deep/8 py-1.5 z-30"
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              {extra.map((it, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    it.onClick();
+                  }}
+                  className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-deep/80 hover:bg-deep/5 text-left"
+                >
+                  {it.icon}
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DataTable = ({ columns, rows, getRowId, actionsRenderer, searchPlaceholder = "Buscar…", pageSizeOptions = [10, 25, 50] }) => {
+  const [query, setQuery] = useState("");
+  const [visibleCols, setVisibleCols] = useState(() => new Set(columns.filter((c) => c.defaultVisible !== false).map((c) => c.key)));
+  const [colsMenuOpen, setColsMenuOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
+  const [page, setPage] = useState(1);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter((r) => columns.some((c) => String((c.searchValue ? c.searchValue(r) : r[c.key]) ?? "").toLowerCase().includes(q)))
+    : rows;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const pageRows = filtered.slice(start, start + pageSize);
+  const visibleColumns = columns.filter((c) => visibleCols.has(c.key));
+
+  const toggleCol = (key) => {
+    setVisibleCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-deep/35" />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder={searchPlaceholder}
+            className={`${inputClass} pl-9`}
+          />
+        </div>
+        <div className="flex-1" />
+        <div className="relative">
+          <Button variant="secondary" onClick={() => setColsMenuOpen((v) => !v)}>
+            <ColumnsIcon /> Columnas
+          </Button>
+          {colsMenuOpen && (
+            <div
+              className="absolute right-0 top-11 w-56 bg-white rounded-xl shadow-xl border border-deep/8 py-2 z-30"
+              onMouseLeave={() => setColsMenuOpen(false)}
+            >
+              {columns.map((c) => (
+                <label key={c.key} className="flex items-center gap-2 px-3.5 py-1.5 text-sm text-deep/80 cursor-pointer">
+                  <input type="checkbox" checked={visibleCols.has(c.key)} onChange={() => toggleCol(c.key)} />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+          className={`${inputClass} w-auto`}
+        >
+          {pageSizeOptions.map((n) => (
+            <option key={n} value={n}>
+              {n} por página
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <EmptyState text="No se encontraron resultados." />
+      ) : (
+        <>
+          <TableWrap>
+            <table className="w-full text-sm">
+              <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+                <tr>
+                  {visibleColumns.map((c) => (
+                    <th key={c.key} className="text-left px-4 py-3 font-semibold whitespace-nowrap">
+                      {c.label}
+                    </th>
+                  ))}
+                  {actionsRenderer && <th className="px-4 py-3"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((row, i) => (
+                  <tr key={getRowId(row)} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                    {visibleColumns.map((c) => (
+                      <td key={c.key} className="px-4 py-3 border-t border-deep/5">
+                        {c.render ? c.render(row) : row[c.key]}
+                      </td>
+                    ))}
+                    {actionsRenderer && <td className="px-4 py-3 border-t border-deep/5">{actionsRenderer(row)}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3 text-sm text-deep/55">
+            <p>
+              {start + 1}-{Math.min(start + pageSize, filtered.length)} de {filtered.length}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1.5 rounded-lg border border-deep/10 disabled:opacity-30"
+              >
+                ‹
+              </button>
+              <span className="px-2">
+                {safePage} / {totalPages}
+              </span>
+              <button
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1.5 rounded-lg border border-deep/10 disabled:opacity-30"
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const { useState } = React;
+
+/* ---------------------------------------------------------
+   NAVEGACIÓN: árbol del sidebar, accesos rápidos y eyebrows
+--------------------------------------------------------- */
+// Sub-ítems compartidos entre Contabilidad (13, idénticos en sucursal y
+// fábrica, bajo el CUIT propio de cada una — nunca consolidados) y
+// Configuraciones. Placeholders honestos: son pantallas reales de
+// navegación, pero el contenido dice explícitamente "Próximamente" en vez
+// de simular un motor contable que todavía no existe.
+const CONTABILIDAD_ITEMS = [
+  { key: "cont-iva-ventas", label: "IVA Ventas" },
+  { key: "cont-iva-compras", label: "IVA Compras" },
+  { key: "cont-iibb", label: "Ingresos Brutos" },
+  { key: "cont-municipalidad", label: "Municipalidad" },
+  { key: "cont-retenciones", label: "Retenciones" },
+  { key: "cont-percepciones", label: "Percepciones" },
+  { key: "cont-plan-cuenta", label: "Plan de Cuenta" },
+  { key: "cont-asiento-manual", label: "Asiento Manual" },
+  { key: "cont-libro-diario", label: "Libro Diario" },
+  { key: "cont-libro-mayor", label: "Libro Mayor" },
+  { key: "cont-estado-resultados", label: "Estado de Resultados" },
+  { key: "cont-estado-situacion", label: "Estado de Situación Patrimonial" },
+  { key: "cont-sumas-saldos", label: "Sumas y Saldos" },
+];
+
+const CAJA_PLACEHOLDER_ITEMS = [
+  { key: "caja-cheques-terceros", label: "Cheques Terceros" },
+  { key: "caja-cheques-propios", label: "Cheques Propios" },
+  { key: "caja-cuentas-bancarias", label: "Cuentas Bancarias" },
+  { key: "caja-tarjetas", label: "Tarjetas" },
+  { key: "caja-conceptos", label: "Conceptos" },
+];
+
+const CONFIG_ITEMS = [
+  { key: "config-emails", label: "Emails" },
+  { key: "config-leyendas", label: "Leyendas" },
+  { key: "config-reportes", label: "Reportes" },
+  { key: "config-roles", label: "Roles" },
+  { key: "config-usuarios", label: "Usuarios" },
+  { key: "config-integraciones", label: "Integraciones" },
+];
+
+const modulosParaRol = (rolNombre) => {
+  if (rolNombre === "empleado_sucursal") {
+    return [
+      { key: "clientes", label: "Clientes", icon: <IdCardIcon /> },
+      {
+        key: "ventas",
+        label: "Ventas",
+        icon: <CashIcon />,
+        children: [
+          { key: "pedidos", label: "Pedidos" },
+          { key: "venta-recibos-app", label: "Recibos App" },
+        ],
+      },
+      {
+        key: "productos-servicios",
+        label: "Productos/Servicios",
+        icon: <LeafIcon />,
+        children: [
+          { key: "catalogo-consulta", label: "Lista" },
+          { key: "transferencias", label: "Transferencias de Stock" },
+        ],
+      },
+    ];
+  }
+
+  return [
+    { key: "dashboard", label: "Dashboard", icon: <ChartIcon /> },
+    { key: "clientes", label: "Clientes", icon: <IdCardIcon /> },
+    {
+      key: "ventas",
+      label: "Ventas",
+      icon: <CashIcon />,
+      children: [
+        { key: "venta-facturas", label: "Facturas" },
+        { key: "venta-presupuestos", label: "Presupuestos" },
+        { key: "venta-recibos", label: "Recibos" },
+        { key: "cobranzas", label: "Cobranzas" },
+        { key: "venta-remitos", label: "Remitos" },
+        { key: "pedidos", label: "Pedidos" },
+        { key: "venta-recibos-app", label: "Recibos App" },
+      ],
+    },
+    {
+      key: "productos-servicios",
+      label: "Productos/Servicios",
+      icon: <LeafIcon />,
+      children: [
+        { key: "catalogo", label: "Lista" },
+        { key: "listas-precios", label: "Listas de Precios" },
+        { key: "ajuste", label: "Ajustes de Stock" },
+        { key: "transferencias", label: "Transferencias de Stock" },
+        { key: "categorias", label: "Categorías" },
+        { key: "marcas", label: "Marcas" },
+        { key: "grupos", label: "Grupos" },
+        { key: "variantes", label: "Variantes" },
+        { key: "depositos", label: "Depósitos" },
+      ],
+    },
+    {
+      key: "caja",
+      label: "Caja",
+      icon: <BoxIcon />,
+      children: [
+        { key: "caja", label: "Movimientos" },
+        { key: "caja-cheques-terceros", label: "Cheques Terceros" },
+        { key: "caja-cheques-propios", label: "Cheques Propios" },
+        { key: "caja-cuentas-bancarias", label: "Cuentas Bancarias" },
+        { key: "caja-tarjetas", label: "Tarjetas" },
+        { key: "caja-conceptos", label: "Conceptos" },
+      ],
+    },
+    {
+      key: "estadisticas",
+      label: "Estadísticas",
+      icon: <ChartIcon />,
+      children: [
+        { key: "stats-clientes", label: "Clientes" },
+        { key: "stats-presupuestos", label: "Presupuestos" },
+        { key: "stats-productos", label: "Productos" },
+        { key: "stats-ventas", label: "Ventas" },
+      ],
+    },
+    { key: "contabilidad", label: "Contabilidad", icon: <ClipboardIcon />, children: CONTABILIDAD_ITEMS },
+    { key: "configuraciones", label: "Configuraciones", icon: <UsersIcon />, children: CONFIG_ITEMS },
+  ];
+};
+
+const quickAccessParaRol = (rolNombre) =>
+  rolNombre === "responsable_sucursal"
+    ? [
+        { key: "dashboard", label: "Dashboard", icon: <ChartIcon className="w-5 h-5" /> },
+        { key: "qa-nuevo-cliente", target: "clientes", label: "Nuevo Cliente", icon: <IdCardIcon className="w-5 h-5" /> },
+        { key: "venta-facturas", label: "Nueva Factura de Venta", icon: <ClipboardIcon className="w-5 h-5" /> },
+        { key: "venta-presupuestos", label: "Nuevo Presupuesto", icon: <ChartIcon className="w-5 h-5" /> },
+        { key: "venta-recibos", label: "Nuevo Recibo", icon: <CashIcon className="w-5 h-5" /> },
+        { key: "qa-nuevo-producto", target: "catalogo", label: "Nuevo Producto o Servicio", icon: <LeafIcon className="w-5 h-5" /> },
+        { key: "ajuste", label: "Ajuste de stock", icon: <AlertIcon className="w-5 h-5" /> },
+        { key: "qa-factura-cf", target: "venta-facturas", label: "Nueva Factura de Venta a Consumidor Final", icon: <IdCardIcon className="w-5 h-5" /> },
+        { key: "qa-presupuesto-cf", target: "venta-presupuestos", label: "Nuevo Presupuesto a Consumidor Final", icon: <IdCardIcon className="w-5 h-5" /> },
+        { key: "qa-cerrar-caja", target: "caja", label: "Cerrar Caja", icon: <BoxIcon className="w-5 h-5" /> },
+        { key: "qa-arca", target: "config-integraciones", label: "Conexión ARCA", icon: <PlugIcon className="w-5 h-5" /> },
+      ]
+    : [
+        { key: "qa-nuevo-cliente", target: "clientes", label: "Nuevo Cliente", icon: <IdCardIcon className="w-5 h-5" /> },
+        { key: "qa-nuevo-pedido", target: "pedidos", label: "Nuevo Pedido", icon: <ClipboardIcon className="w-5 h-5" /> },
+        { key: "ingreso", label: "Nuevo Movimiento (ingreso de mercadería)", icon: <TruckIcon className="w-5 h-5" /> },
+        { key: "catalogo-consulta", label: "Consultar Precio de Producto/s", icon: <LeafIcon className="w-5 h-5" /> },
+        { key: "ventas", label: "Venta a Consumidor Final (sin numeración fiscal)", icon: <CashIcon className="w-5 h-5" /> },
+      ];
+
+const EYEBROWS = {
+  dashboard: { n: "01", label: "Panel" },
+  clientes: { n: "02", label: "Clientes" },
+  pedidos: { n: "03", label: "Ventas" },
+  "venta-facturas": { n: "04", label: "Ventas" },
+  "venta-presupuestos": { n: "05", label: "Ventas" },
+  "venta-recibos": { n: "06", label: "Ventas" },
+  cobranzas: { n: "07", label: "Ventas" },
+  "venta-remitos": { n: "08", label: "Ventas" },
+  "venta-recibos-app": { n: "09", label: "Ventas" },
+  catalogo: { n: "10", label: "Productos/Servicios" },
+  stock: { n: "10", label: "Productos/Servicios" }, // StockTab quedó sin entrada propia en el sidebar (ver resumen) — esto es solo para que no rompa si algo la referencia.
+  "catalogo-consulta": { n: "10", label: "Productos/Servicios" },
+  "listas-precios": { n: "11", label: "Productos/Servicios" },
+  ajuste: { n: "12", label: "Productos/Servicios" },
+  ingreso: { n: "12", label: "Productos/Servicios" },
+  transferencias: { n: "13", label: "Productos/Servicios" },
+  categorias: { n: "14", label: "Productos/Servicios" },
+  marcas: { n: "15", label: "Productos/Servicios" },
+  grupos: { n: "16", label: "Productos/Servicios" },
+  variantes: { n: "17", label: "Productos/Servicios" },
+  depositos: { n: "18", label: "Productos/Servicios" },
+  ventas: { n: "19", label: "Caja" },
+  caja: { n: "20", label: "Caja" },
+  "caja-cheques-terceros": { n: "21", label: "Caja" },
+  "caja-cheques-propios": { n: "22", label: "Caja" },
+  "caja-cuentas-bancarias": { n: "23", label: "Caja" },
+  "caja-tarjetas": { n: "24", label: "Caja" },
+  "caja-conceptos": { n: "25", label: "Caja" },
+  "stats-clientes": { n: "26", label: "Estadísticas" },
+  "stats-presupuestos": { n: "27", label: "Estadísticas" },
+  "stats-productos": { n: "28", label: "Estadísticas" },
+  "stats-ventas": { n: "29", label: "Estadísticas" },
+};
+(() => {
+  let n = 30;
+  CONTABILIDAD_ITEMS.forEach((it) => {
+    EYEBROWS[it.key] = { n: String(n++).padStart(2, "0"), label: "Contabilidad" };
+  });
+  CONFIG_ITEMS.forEach((it) => {
+    EYEBROWS[it.key] = { n: String(n++).padStart(2, "0"), label: "Configuraciones" };
+  });
+})();
+
+const ESTADOS_CONTABLES = ["confirmado", "en_preparacion", "listo_retiro", "pendiente_envio", "finalizado"];
+
+const buildRangeBuckets = (range) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const buckets = [];
+  if (range === "semana") {
+    for (let i = 6; i >= 0; i--) {
+      const start = new Date(today);
+      start.setDate(start.getDate() - i);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      buckets.push({ start, end, label: start.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" }) });
+    }
+  } else if (range === "mes") {
+    for (let i = 3; i >= 0; i--) {
+      const end = new Date(today);
+      end.setDate(end.getDate() - i * 7);
+      const start = new Date(end);
+      start.setDate(start.getDate() - 7);
+      buckets.push({ start, end, label: start.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" }) });
+    }
+  } else {
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const end = new Date(today.getFullYear(), today.getMonth() - i + 1, 1);
+      buckets.push({ start, end, label: start.toLocaleDateString("es-AR", { month: "short" }) });
+    }
+  }
+  return buckets;
+};
+
+const useSalesChartData = (sucursalId) => {
+  const [range, setRange] = useState("semana");
+  const buckets = buildRangeBuckets(range);
+  const ventas = GFDB.query("ventas", (v) => v.sucursal_id === sucursalId);
+  const pedidos = GFDB.query("pedidos", (p) => p.sucursal_id === sucursalId && ESTADOS_CONTABLES.includes(p.estado));
+  const data = buckets.map((b) => {
+    const totalVentas = ventas
+      .filter((v) => {
+        const d = new Date(v.fecha_hora);
+        return d >= b.start && d < b.end;
+      })
+      .reduce((acc, v) => acc + v.total, 0);
+    const totalPedidos = pedidos
+      .filter((p) => {
+        const d = new Date(p.fecha);
+        return d >= b.start && d < b.end;
+      })
+      .reduce((acc, p) => acc + p.total, 0);
+    return { label: b.label, value: totalVentas + totalPedidos };
+  });
+  return { range, setRange, data };
+};
+
+/* ---------------------------------------------------------
+   DASHBOARD
+--------------------------------------------------------- */
+const DashboardSucursalTab = ({ session, onNavigate }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const pedidosPendientes = GFDB.query("pedidos", (p) => p.sucursal_id === session.sucursalId && p.estado === "pendiente");
+  const stockRows = GFDB.query("stock_productos", (s) => s.ubicacion_stock_id === ubicacion.id);
+  const stockBajo = stockRows.filter((s) => s.cantidad_actual <= s.stock_minimo);
+  const hoy = GFDB.fechaHoy();
+  const ventasHoy = GFDB.query("ventas", (v) => v.sucursal_id === session.sucursalId && v.fecha_hora.slice(0, 10) === hoy);
+  const cierreHoy = GFDB.query("cierres_caja", (c) => c.sucursal_id === session.sucursalId && c.fecha === hoy)[0];
+  const totalCajaHoy = cierreHoy ? cierreHoy.total_general : ventasHoy.reduce((acc, v) => acc + v.total, 0);
+  const { range, setRange, data } = useSalesChartData(session.sucursalId);
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.dashboard.n} eyebrow={EYEBROWS.dashboard.label} title="Dashboard" description={`Resumen de ${ubicacion.nombre}`} />
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <KpiCard icon={<ClipboardIcon />} color="#00AE4C" label="Pedidos por confirmar" value={pedidosPendientes.length} />
+        <KpiCard icon={<AlertIcon />} color="#DC2626" label="Stock bajo" value={stockBajo.length} />
+        <KpiCard icon={<CashIcon />} color="#29683D" label="Ventas de hoy" value={ventasHoy.length} />
+        <KpiCard icon={<BoxIcon />} color="#1A312B" label="Total caja de hoy" value={money(totalCajaHoy)} />
+      </div>
+
+      <div className="mb-6">
+        <SalesChart data={data} range={range} onRangeChange={setRange} />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        <WidgetCard
+          title="Pedidos pendientes de confirmar"
+          accent="#00AE4C"
+          footer={
+            <button onClick={() => onNavigate("pedidos")} className="text-sm font-semibold text-institutional hover:underline">
+              Ver todos los pedidos →
+            </button>
+          }
+        >
+          {pedidosPendientes.length === 0 ? (
+            <EmptyState text="No hay pedidos pendientes." />
+          ) : (
+            <ul className="divide-y divide-deep/6">
+              {pedidosPendientes.slice(0, 5).map((p) => {
+                const cliente = GFDB.find("clientes", p.cliente_id);
+                return (
+                  <li key={p.id} className="py-2.5 flex items-center justify-between text-sm">
+                    <span className="text-deep">
+                      #{p.id} · {cliente.nombre}
+                    </span>
+                    <span className="font-semibold text-deep">{money(p.total)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </WidgetCard>
+
+        <WidgetCard
+          title="Productos con stock bajo"
+          accent="#DC2626"
+          footer={
+            <button onClick={() => onNavigate("catalogo")} className="text-sm font-semibold text-institutional hover:underline">
+              Ver stock completo →
+            </button>
+          }
+        >
+          {stockBajo.length === 0 ? (
+            <EmptyState text="Todo el stock está por encima del mínimo." />
+          ) : (
+            <ul className="divide-y divide-deep/6">
+              {stockBajo.slice(0, 5).map((s) => {
+                const producto = GFDB.find("productos", s.producto_id);
+                return (
+                  <li key={s.id} className="py-2.5 flex items-center justify-between text-sm">
+                    <span className="text-deep">{producto.nombre}</span>
+                    <span className="font-semibold text-red-600">
+                      {s.cantidad_actual} / mín. {s.stock_minimo}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </WidgetCard>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   STOCK
+--------------------------------------------------------- */
+const StockTab = ({ session }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const rows = GFDB.query("stock_productos", (s) => s.ubicacion_stock_id === ubicacion.id);
+  const [categoria, setCategoria] = useState("todas");
+  const categorias = GFDB.get("categorias");
+
+  const filtradas = rows.filter((r) => {
+    if (categoria === "todas") return true;
+    const p = GFDB.find("productos", r.producto_id);
+    return p.categoria_id === Number(categoria);
+  });
+
+  const columns = [
+    { key: "producto", label: "Producto", render: (r) => GFDB.find("productos", r.producto_id).nombre, searchValue: (r) => GFDB.find("productos", r.producto_id).nombre },
+    { key: "cantidad", label: "Cantidad actual", render: (r) => r.cantidad_actual },
+    { key: "minimo", label: "Mínimo", render: (r) => r.stock_minimo },
+    { key: "maximo", label: "Máximo", render: (r) => r.stock_maximo },
+    {
+      key: "estado",
+      label: "Estado",
+      render: (r) =>
+        r.cantidad_actual <= r.stock_minimo ? (
+          <span className="inline-flex items-center gap-1 text-red-600 text-xs font-semibold">
+            <AlertIcon className="w-4 h-4" /> Stock bajo
+          </span>
+        ) : (
+          <span className="text-xs text-deep/40">OK</span>
+        ),
+      csvValue: (r) => (r.cantidad_actual <= r.stock_minimo ? "Stock bajo" : "OK"),
+    },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.stock.n} eyebrow={EYEBROWS.stock.label} title="Stock" description={ubicacion.nombre} />
+      <ListToolbar onExport={() => exportCSV("stock.csv", columns, filtradas)} onPrint={() => window.print()} />
+      <FiltersBar
+        filters={[
+          {
+            label: "Categoría",
+            value: categoria,
+            onChange: setCategoria,
+            options: [{ value: "todas", label: "Todas las categorías" }, ...categorias.map((c) => ({ value: String(c.id), label: c.nombre }))],
+          },
+        ]}
+      />
+      <DataTable columns={columns} rows={filtradas} getRowId={(r) => r.id} searchPlaceholder="Buscar producto…" />
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   INGRESO DE MERCADERÍA
+--------------------------------------------------------- */
+const IngresoTab = ({ session, bump, showToast }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const productos = GFDB.get("productos");
+  const [productoId, setProductoId] = useState(productos[0] ? productos[0].id : "");
+  const [cantidad, setCantidad] = useState("");
+  const [motivo, setMotivo] = useState("");
+
+  const movimientos = GFDB.query(
+    "movimientos_stock",
+    (m) => m.tipo_movimiento === "ingreso_mercaderia" && GFDB.find("stock_productos", m.stock_producto_id)?.ubicacion_stock_id === ubicacion.id
+  ).sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!productoId || !cantidad || Number(cantidad) <= 0) return;
+    GFDB.registrarIngresoMercaderia({
+      productoId: Number(productoId),
+      ubicacionId: ubicacion.id,
+      cantidad: Number(cantidad),
+      usuarioId: session.usuarioId,
+      motivo,
+    });
+    setCantidad("");
+    setMotivo("");
+    bump();
+    showToast("Ingreso registrado y stock actualizado.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.ingreso.n} eyebrow={EYEBROWS.ingreso.label} title="Ingreso de mercadería" description={ubicacion.nombre} />
+      <Card className="p-6 mb-8 max-w-xl">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Producto">
+            <select value={productoId} onChange={(e) => setProductoId(e.target.value)} className={inputClass}>
+              {productos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Cantidad">
+            <input type="number" min="1" required value={cantidad} onChange={(e) => setCantidad(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Motivo (opcional)">
+            <input value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} placeholder="Ej: reposición proveedor" />
+          </Field>
+          <Button type="submit">Registrar ingreso</Button>
+        </form>
+      </Card>
+
+      <h2 className="font-display font-bold text-lg text-deep mb-3">Últimos ingresos</h2>
+      {movimientos.length === 0 ? (
+        <EmptyState text="Todavía no se registraron ingresos." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-sm">
+            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-3">Fecha</th>
+                <th className="text-left px-4 py-3">Producto</th>
+                <th className="text-left px-4 py-3">Cantidad</th>
+                <th className="text-left px-4 py-3">Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {movimientos.map((m, i) => {
+                const sp = GFDB.find("stock_productos", m.stock_producto_id);
+                const producto = GFDB.find("productos", sp.producto_id);
+                return (
+                  <tr key={m.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                    <td className="px-4 py-3 border-t border-deep/5 whitespace-nowrap">{fmtDateTime(m.fecha_hora)}</td>
+                    <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{producto.nombre}</td>
+                    <td className="px-4 py-3 border-t border-deep/5">+{m.cantidad}</td>
+                    <td className="px-4 py-3 border-t border-deep/5 text-deep/50">{m.motivo}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   PEDIDOS
+--------------------------------------------------------- */
+const ESTADOS_FILTRO = [{ value: "todos", label: "Todos los estados" }, ...window.GF_ENUMS.estado_pedido];
+const MODALIDADES_FILTRO = [{ value: "todas", label: "Todas las modalidades" }, ...window.GF_ENUMS.modalidad_entrega];
+const FECHA_FILTROS = [
+  { value: "todas", label: "Cualquier fecha" },
+  { value: "hoy", label: "Hoy" },
+  { value: "7d", label: "Últimos 7 días" },
+  { value: "30d", label: "Últimos 30 días" },
+];
+
+const MiniButton = ({ variant = "primary", className = "", ...rest }) => {
+  const variants = {
+    primary: "bg-institutional text-white hover:bg-medium",
+    danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50",
+  };
+  return <button className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${variants[variant]} ${className}`} {...rest} />;
+};
+
+const PedidoDetalleModal = ({ pedido, onClose, session, bump, showToast }) => {
+  const [obsInterna, setObsInterna] = useState(pedido ? pedido.observaciones_internas || "" : "");
+
+  if (!pedido) return null;
+  const cliente = GFDB.find("clientes", pedido.cliente_id);
+  const lineas = GFDB.query("detalle_pedidos", (d) => d.pedido_id === pedido.id);
+
+  const confirmar = () => {
+    GFDB.confirmarPedido(pedido.id, session.usuarioId);
+    bump();
+    showToast("Pedido confirmado. El pago ya está habilitado para el cliente.");
+    onClose();
+  };
+  const rechazar = () => {
+    GFDB.rechazarPedido(pedido.id, session.usuarioId);
+    bump();
+    showToast("Pedido rechazado.", "error");
+    onClose();
+  };
+  const guardarObs = () => {
+    GFDB.guardarObservacionInterna(pedido.id, obsInterna, session.usuarioId);
+    bump();
+    showToast("Observación interna guardada.");
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title={`Pedido #${pedido.id}`} wide>
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <StatusPill estado={pedido.estado} />
+        <PagoPill habilitado={pedido.pago_habilitado} />
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-5 mb-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1">Cliente</p>
+          <p className="text-sm text-deep font-medium">{cliente.nombre}</p>
+          <p className="text-sm text-deep/60">
+            {cliente.telefono} · {cliente.email}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1">Modalidad de entrega</p>
+          <p className="text-sm text-deep">{enumLabel("modalidad_entrega", pedido.modalidad)}</p>
+          <p className="text-xs text-deep/50 mt-1">{fmtDateTime(pedido.fecha)}</p>
+        </div>
+      </div>
+
+      <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-2">Productos</p>
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-2.5">Producto</th>
+              <th className="text-left px-4 py-2.5">Cantidad</th>
+              <th className="text-left px-4 py-2.5">Precio unit.</th>
+              <th className="text-left px-4 py-2.5">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineas.map((l) => {
+              const producto = GFDB.find("productos", l.producto_id);
+              return (
+                <tr key={l.id}>
+                  <td className="px-4 py-2.5 border-t border-deep/5 font-medium text-deep">{producto.nombre}</td>
+                  <td className="px-4 py-2.5 border-t border-deep/5">{l.cantidad}</td>
+                  <td className="px-4 py-2.5 border-t border-deep/5">{money(l.precio_unitario)}</td>
+                  <td className="px-4 py-2.5 border-t border-deep/5">{money(l.subtotal)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </TableWrap>
+      <p className="text-right font-semibold text-deep mt-2">Total: {money(pedido.total)}</p>
+
+      {pedido.observaciones && (
+        <div className="mt-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1">Observaciones del cliente</p>
+          <p className="text-sm text-deep/70 bg-deep/5 rounded-xl px-3.5 py-2.5">{pedido.observaciones}</p>
+        </div>
+      )}
+
+      <div className="mt-5">
+        <Field label="Observaciones internas de la sucursal">
+          <textarea
+            value={obsInterna}
+            onChange={(e) => setObsInterna(e.target.value)}
+            rows={3}
+            className={inputClass}
+            placeholder="Notas visibles solo para el equipo de la sucursal"
+          />
+        </Field>
+        <div className="flex items-center gap-2 mt-2">
+          <Button variant="secondary" onClick={guardarObs}>
+            Guardar observación
+          </Button>
+          <Button variant="secondary" onClick={() => window.print()}>
+            <PrinterIcon className="w-4 h-4" /> Imprimir
+          </Button>
+        </div>
+      </div>
+
+      {pedido.estado === "pendiente" && (
+        <div className="mt-6 flex flex-wrap gap-3 border-t border-deep/8 pt-5">
+          <Button onClick={confirmar}>
+            <CheckIcon className="w-4 h-4" /> Confirmar pedido
+          </Button>
+          <Button variant="danger" onClick={rechazar}>
+            Rechazar pedido
+          </Button>
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+const NuevoPedidoModal = ({ session, onClose, bump, showToast }) => {
+  const clientes = GFDB.get("clientes");
+  const productos = GFDB.get("productos");
+  const [clienteId, setClienteId] = useState(clientes[0]?.id || "");
+  const [modalidad, setModalidad] = useState("retiro_sucursal");
+  const [lineas, setLineas] = useState([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+  const [observaciones, setObservaciones] = useState("");
+
+  const setLinea = (idx, patch) => setLineas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  const addLinea = () => setLineas((prev) => [...prev, { productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+  const removeLinea = (idx) => setLineas((prev) => prev.filter((_, i) => i !== idx));
+  const total = lineas.reduce((acc, l) => acc + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const items = lineas
+      .filter((l) => l.productoId && Number(l.cantidad) > 0)
+      .map((l) => ({ productoId: Number(l.productoId), cantidad: Number(l.cantidad), precioUnitario: Number(l.precio) }));
+    if (!clienteId || items.length === 0) return;
+    GFDB.crearPedidoManual({ sucursalId: session.sucursalId, clienteId: Number(clienteId), usuarioId: session.usuarioId, modalidad, items, observaciones });
+    bump();
+    showToast("Pedido cargado como pendiente de confirmar.");
+    onClose();
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title="Nuevo pedido" wide>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Cliente">
+            <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className={inputClass}>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Modalidad de entrega">
+            <select value={modalidad} onChange={(e) => setModalidad(e.target.value)} className={inputClass}>
+              {window.GF_ENUMS.modalidad_entrega.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <div className="space-y-3">
+          {lineas.map((l, idx) => (
+            <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_140px_auto] gap-3 items-end">
+              <Field label="Producto">
+                <select
+                  value={l.productoId}
+                  onChange={(e) => {
+                    const p = GFDB.find("productos", Number(e.target.value));
+                    setLinea(idx, { productoId: e.target.value, precio: p ? p.precio : 0 });
+                  }}
+                  className={inputClass}
+                >
+                  {productos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Cantidad">
+                <input type="number" min="1" value={l.cantidad} onChange={(e) => setLinea(idx, { cantidad: e.target.value })} className={inputClass} />
+              </Field>
+              <Field label="Precio unit.">
+                <input type="number" min="0" value={l.precio} onChange={(e) => setLinea(idx, { precio: e.target.value })} className={inputClass} />
+              </Field>
+              {lineas.length > 1 && (
+                <Button type="button" variant="ghost" onClick={() => removeLinea(idx)}>
+                  Quitar
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+        <Button type="button" variant="secondary" onClick={addLinea}>
+          <PlusIcon /> Agregar producto
+        </Button>
+
+        <div className="flex items-center justify-between pt-2 border-t border-deep/8">
+          <p className="text-2xl font-display font-bold text-deep">{money(total)}</p>
+        </div>
+
+        <Field label="Observaciones">
+          <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} className={inputClass} />
+        </Field>
+        <Button type="submit">Cargar pedido</Button>
+      </form>
+    </Modal>
+  );
+};
+
+const PedidosTab = ({ session, bump, showToast }) => {
+  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtroModalidad, setFiltroModalidad] = useState("todas");
+  const [filtroFecha, setFiltroFecha] = useState("todas");
+  const [seleccionado, setSeleccionado] = useState(null);
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
+
+  const dentroDeRangoFecha = (fechaISO) => {
+    if (filtroFecha === "todas") return true;
+    const dias = filtroFecha === "hoy" ? 1 : filtroFecha === "7d" ? 7 : 30;
+    const limite = new Date();
+    limite.setDate(limite.getDate() - dias);
+    return new Date(fechaISO) >= limite;
+  };
+
+  const pedidos = GFDB.query("pedidos", (p) => p.sucursal_id === session.sucursalId)
+    .filter((p) => filtroEstado === "todos" || p.estado === filtroEstado)
+    .filter((p) => filtroModalidad === "todas" || p.modalidad === filtroModalidad)
+    .filter((p) => dentroDeRangoFecha(p.fecha))
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+  const pedidoActivo = seleccionado ? GFDB.find("pedidos", seleccionado) : null;
+
+  const columns = [
+    { key: "id", label: "Pedido", render: (p) => `#${p.id}` },
+    {
+      key: "cliente",
+      label: "Cliente",
+      render: (p) => GFDB.find("clientes", p.cliente_id).nombre,
+      searchValue: (p) => GFDB.find("clientes", p.cliente_id).nombre,
+    },
+    { key: "fecha", label: "Fecha", render: (p) => fmtDate(p.fecha) },
+    { key: "modalidad", label: "Modalidad", render: (p) => enumLabel("modalidad_entrega", p.modalidad) },
+    { key: "total", label: "Total", render: (p) => money(p.total) },
+    { key: "estado", label: "Estado", render: (p) => <StatusPill estado={p.estado} />, csvValue: (p) => enumLabel("estado_pedido", p.estado) },
+    { key: "pago", label: "Pago", render: (p) => <PagoPill habilitado={p.pago_habilitado} />, csvValue: (p) => (p.pago_habilitado ? "Habilitado" : "No habilitado") },
+  ];
+
+  const actionsRenderer = (p) => {
+    const proximos = GFDB.proximosEstadosPedido(p.estado);
+    const extra = proximos.map((estado) => ({
+      icon: <CheckIcon className="w-4 h-4" />,
+      label: `Marcar como "${enumLabel("estado_pedido", estado)}"`,
+      onClick: () => {
+        GFDB.avanzarEstadoPedido(p.id, estado, session.usuarioId);
+        bump();
+        showToast(`Pedido #${p.id} actualizado a "${enumLabel("estado_pedido", estado)}".`);
+      },
+    }));
+    return (
+      <div className="flex items-center justify-end gap-2">
+        {p.estado === "pendiente" && (
+          <>
+            <MiniButton
+              onClick={() => {
+                GFDB.confirmarPedido(p.id, session.usuarioId);
+                bump();
+                showToast("Pedido confirmado. El pago ya está habilitado para el cliente.");
+              }}
+            >
+              Confirmar
+            </MiniButton>
+            <MiniButton
+              variant="danger"
+              onClick={() => {
+                GFDB.rechazarPedido(p.id, session.usuarioId);
+                bump();
+                showToast("Pedido rechazado.", "error");
+              }}
+            >
+              Rechazar
+            </MiniButton>
+          </>
+        )}
+        <RowActions onView={() => setSeleccionado(p.id)} extra={extra} />
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS.pedidos.n}
+        eyebrow={EYEBROWS.pedidos.label}
+        title="Pedidos"
+        description="Confirmar un pedido habilita recién ahí el pago para el cliente."
+      />
+      <ListToolbar onNew={() => setNuevoAbierto(true)} newLabel="Nuevo pedido" onExport={() => exportCSV("pedidos.csv", columns, pedidos)} onPrint={() => window.print()} />
+      <FiltersBar
+        filters={[
+          { label: "Estado", value: filtroEstado, onChange: setFiltroEstado, options: ESTADOS_FILTRO },
+          { label: "Modalidad de entrega", value: filtroModalidad, onChange: setFiltroModalidad, options: MODALIDADES_FILTRO },
+          { label: "Fecha", value: filtroFecha, onChange: setFiltroFecha, options: FECHA_FILTROS },
+        ]}
+      />
+      <DataTable columns={columns} rows={pedidos} getRowId={(p) => p.id} actionsRenderer={actionsRenderer} searchPlaceholder="Buscar cliente…" />
+
+      {pedidoActivo && (
+        <PedidoDetalleModal pedido={pedidoActivo} onClose={() => setSeleccionado(null)} session={session} bump={bump} showToast={showToast} />
+      )}
+      {nuevoAbierto && <NuevoPedidoModal session={session} onClose={() => setNuevoAbierto(false)} bump={bump} showToast={showToast} />}
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   VENTAS PRESENCIALES
+--------------------------------------------------------- */
+const VentasTab = ({ session, bump, showToast }) => {
+  const productos = GFDB.get("productos");
+  const [lineas, setLineas] = useState([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+  const [medioPago, setMedioPago] = useState("efectivo");
+  const [medioFiltro, setMedioFiltro] = useState("todos");
+
+  const setLinea = (idx, patch) => setLineas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  const addLinea = () => setLineas((prev) => [...prev, { productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+  const removeLinea = (idx) => setLineas((prev) => prev.filter((_, i) => i !== idx));
+
+  const total = lineas.reduce((acc, l) => acc + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const items = lineas
+      .filter((l) => l.productoId && Number(l.cantidad) > 0)
+      .map((l) => ({ productoId: Number(l.productoId), cantidad: Number(l.cantidad), precioUnitario: Number(l.precio) }));
+    if (items.length === 0) return;
+    GFDB.registrarVentaPresencial({ sucursalId: session.sucursalId, usuarioId: session.usuarioId, items, medioPago });
+    setLineas([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+    setMedioPago("efectivo");
+    bump();
+    showToast("Venta registrada y stock actualizado.");
+  };
+
+  const ventas = GFDB.query("ventas", (v) => v.sucursal_id === session.sucursalId)
+    .filter((v) => medioFiltro === "todos" || v.medio_pago === medioFiltro)
+    .sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+
+  const columns = [
+    { key: "fecha", label: "Fecha", render: (v) => fmtDateTime(v.fecha_hora) },
+    {
+      key: "usuario",
+      label: "Usuario",
+      render: (v) => GFDB.find("usuarios", v.usuario_id)?.nombre || "-",
+      searchValue: (v) => GFDB.find("usuarios", v.usuario_id)?.nombre || "",
+    },
+    { key: "medio", label: "Medio de pago", render: (v) => enumLabel("medio_pago", v.medio_pago) },
+    { key: "total", label: "Total", render: (v) => money(v.total) },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.ventas.n} eyebrow={EYEBROWS.ventas.label} title="Ventas presenciales" description="Actualiza el stock de la sucursal automáticamente." />
+      <Card className="p-6 mb-8">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-3">
+            {lineas.map((l, idx) => (
+              <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_140px_auto] gap-3 items-end">
+                <Field label="Producto">
+                  <select
+                    value={l.productoId}
+                    onChange={(e) => {
+                      const p = GFDB.find("productos", Number(e.target.value));
+                      setLinea(idx, { productoId: e.target.value, precio: p ? p.precio : 0 });
+                    }}
+                    className={inputClass}
+                  >
+                    {productos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Cantidad">
+                  <input type="number" min="1" value={l.cantidad} onChange={(e) => setLinea(idx, { cantidad: e.target.value })} className={inputClass} />
+                </Field>
+                <Field label="Precio unit.">
+                  <input type="number" min="0" value={l.precio} onChange={(e) => setLinea(idx, { precio: e.target.value })} className={inputClass} />
+                </Field>
+                {lineas.length > 1 && (
+                  <Button type="button" variant="ghost" onClick={() => removeLinea(idx)}>
+                    Quitar
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="secondary" onClick={addLinea}>
+            <PlusIcon /> Agregar producto
+          </Button>
+
+          <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-deep/8">
+            <Field label="Medio de pago">
+              <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)} className={inputClass}>
+                {window.GF_ENUMS.medio_pago.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="flex flex-col justify-end">
+              <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1.5">Total</p>
+              <p className="text-2xl font-display font-bold text-deep">{money(total)}</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-deep/40">Se registra a nombre de {session.nombre}, {fmtDateTime(GFDB.nowISO())}.</p>
+          <Button type="submit">Registrar venta</Button>
+        </form>
+      </Card>
+
+      <h2 className="font-display font-bold text-lg text-deep mb-3">Historial de ventas de mi sucursal</h2>
+      <ListToolbar onExport={() => exportCSV("ventas.csv", columns, ventas)} onPrint={() => window.print()} />
+      <FiltersBar
+        filters={[
+          {
+            label: "Medio de pago",
+            value: medioFiltro,
+            onChange: setMedioFiltro,
+            options: [{ value: "todos", label: "Todos los medios" }, ...window.GF_ENUMS.medio_pago],
+          },
+        ]}
+      />
+      <DataTable columns={columns} rows={ventas} getRowId={(v) => v.id} searchPlaceholder="Buscar usuario…" />
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   AJUSTAR STOCK (responsable)
+--------------------------------------------------------- */
+const AjusteTab = ({ session, bump, showToast }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const rows = GFDB.query("stock_productos", (s) => s.ubicacion_stock_id === ubicacion.id);
+  const [stockProductoId, setStockProductoId] = useState(rows[0]?.id || "");
+  const [cantidad, setCantidad] = useState("");
+  const [motivo, setMotivo] = useState("");
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!stockProductoId || !cantidad || !motivo.trim()) return;
+    GFDB.ajustarStock({ stockProductoId: Number(stockProductoId), cantidad: Number(cantidad), motivo, usuarioId: session.usuarioId });
+    setCantidad("");
+    setMotivo("");
+    bump();
+    showToast("Ajuste de stock registrado.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.ajuste.n} eyebrow={EYEBROWS.ajuste.label} title="Ajustar stock" description="Solo disponible para responsables de sucursal. Requiere motivo." />
+      <Card className="p-6 max-w-xl">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field label="Producto">
+            <select value={stockProductoId} onChange={(e) => setStockProductoId(e.target.value)} className={inputClass}>
+              {rows.map((r) => {
+                const p = GFDB.find("productos", r.producto_id);
+                return (
+                  <option key={r.id} value={r.id}>
+                    {p.nombre} (actual: {r.cantidad_actual})
+                  </option>
+                );
+              })}
+            </select>
+          </Field>
+          <Field label="Cantidad (positivo suma, negativo resta)">
+            <input type="number" required value={cantidad} onChange={(e) => setCantidad(e.target.value)} className={inputClass} placeholder="Ej: -3" />
+          </Field>
+          <Field label="Motivo">
+            <input required value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} placeholder="Ej: producto dañado, conteo físico, etc." />
+          </Field>
+          <Button type="submit">Aplicar ajuste</Button>
+        </form>
+      </Card>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   CATÁLOGO (responsable)
+--------------------------------------------------------- */
+const CatalogoTab = ({ session, bump, showToast }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const productos = GFDB.get("productos");
+  const categorias = GFDB.get("categorias");
+  const [nombreNuevo, setNombreNuevo] = useState("");
+  const [categoriaNueva, setCategoriaNueva] = useState(categorias[0]?.id || "");
+  const [precioNuevo, setPrecioNuevo] = useState("");
+
+  const asociar = (productoId) => {
+    GFDB.insert("stock_productos", { producto_id: productoId, ubicacion_stock_id: ubicacion.id, cantidad_actual: 0, stock_minimo: 0, stock_maximo: 0 });
+    bump();
+    showToast("Producto asociado a la sucursal.");
+  };
+
+  const guardarProducto = (producto, patch) => {
+    GFDB.update("productos", producto.id, patch);
+    bump();
+    showToast("Catálogo actualizado.");
+  };
+
+  const crearProducto = (e) => {
+    e.preventDefault();
+    if (!nombreNuevo.trim() || !precioNuevo) return;
+    const nuevo = GFDB.insert("productos", {
+      nombre: nombreNuevo,
+      descripcion: "",
+      precio: Number(precioNuevo),
+      imagen: "",
+      categoria_id: Number(categoriaNueva),
+      marca_id: null,
+      grupo_id: null,
+      es_fabricacion_propia: false,
+      visible: true,
+    });
+    GFDB.insert("stock_productos", { producto_id: nuevo.id, ubicacion_stock_id: ubicacion.id, cantidad_actual: 0, stock_minimo: 0, stock_maximo: 0 });
+    setNombreNuevo("");
+    setPrecioNuevo("");
+    bump();
+    showToast("Producto creado y asociado a esta sucursal.");
+  };
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS.catalogo.n}
+        eyebrow={EYEBROWS.catalogo.label}
+        title="Lista de productos"
+        description="El precio y la descripción son del catálogo general de Green Fire; la visibilidad, el stock y la asociación son por sucursal."
+      />
+
+      <Card className="p-6 mb-6">
+        <form onSubmit={crearProducto} className="flex flex-wrap items-end gap-3">
+          <Field label="Nombre del producto nuevo">
+            <input value={nombreNuevo} onChange={(e) => setNombreNuevo(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Categoría">
+            <select value={categoriaNueva} onChange={(e) => setCategoriaNueva(e.target.value)} className={inputClass}>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Precio">
+            <input type="number" min="0" value={precioNuevo} onChange={(e) => setPrecioNuevo(e.target.value)} className={inputClass} />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Nuevo producto o servicio
+          </Button>
+        </form>
+      </Card>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        {productos.map((p) => {
+          const sp = GFDB.stockDeProducto(p.id, ubicacion.id);
+          const asociado = !!sp;
+          return (
+            <Card key={p.id} className="p-5">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="font-semibold text-deep">{p.nombre}</p>
+                  <p className="text-xs text-deep/45">
+                    {asociado ? `Stock en esta sucursal: ${sp.cantidad_actual}` : "No asociado a esta sucursal"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {!asociado && (
+                    <Button variant="secondary" onClick={() => asociar(p.id)}>
+                      Asociar
+                    </Button>
+                  )}
+                  <button
+                    onClick={() => guardarProducto(p, { visible: !p.visible })}
+                    title={p.visible ? "Desactivar (ocultar del catálogo público)" : "Activar (mostrar en el catálogo público)"}
+                    className={`p-1.5 rounded-lg ${p.visible ? "text-institutional hover:bg-institutional/10" : "text-deep/35 hover:bg-deep/5"}`}
+                  >
+                    <PowerIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <Field label="Precio">
+                  <input
+                    type="number"
+                    defaultValue={p.precio}
+                    onBlur={(e) => guardarProducto(p, { precio: Number(e.target.value) })}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Descripción">
+                  <textarea
+                    defaultValue={p.descripcion}
+                    rows={2}
+                    onBlur={(e) => guardarProducto(p, { descripcion: e.target.value })}
+                    className={inputClass}
+                  />
+                </Field>
+                <label className="flex items-center gap-2 text-sm text-deep/70">
+                  <input type="checkbox" checked={p.visible} onChange={(e) => guardarProducto(p, { visible: e.target.checked })} />
+                  Visible para clientes
+                </label>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   CAJA (responsable)
+--------------------------------------------------------- */
+const CajaTab = ({ session, bump, showToast }) => {
+  const hoy = GFDB.fechaHoy();
+  const ventasHoy = GFDB.query("ventas", (v) => v.sucursal_id === session.sucursalId && v.fecha_hora.slice(0, 10) === hoy);
+  const sumaPorMedio = (medio) => ventasHoy.filter((v) => v.medio_pago === medio).reduce((acc, v) => acc + v.total, 0);
+
+  const cierreHoy = GFDB.query("cierres_caja", (c) => c.sucursal_id === session.sucursalId && c.fecha === hoy)[0] || null;
+
+  const [efectivo, setEfectivo] = useState(sumaPorMedio("efectivo"));
+  const [transferencia, setTransferencia] = useState(sumaPorMedio("transferencia"));
+  const [billetera, setBilletera] = useState(sumaPorMedio("billetera_virtual"));
+  const [observaciones, setObservaciones] = useState("");
+
+  const historial = GFDB.query("cierres_caja", (c) => c.sucursal_id === session.sucursalId).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+
+  const cerrar = (e) => {
+    e.preventDefault();
+    GFDB.cerrarCaja({
+      sucursalId: session.sucursalId,
+      usuarioId: session.usuarioId,
+      fecha: hoy,
+      totalEfectivo: Number(efectivo),
+      totalTransferencia: Number(transferencia),
+      totalBilletera: Number(billetera),
+      observaciones,
+    });
+    bump();
+    showToast("Caja cerrada correctamente.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.caja.n} eyebrow={EYEBROWS.caja.label} title="Caja" description="El cierre de esta sucursal no es visible para otras sucursales ni para fábrica." />
+
+      <h2 className="font-display font-bold text-lg text-deep mb-3">Ingresos de hoy ({fmtDate(hoy)})</h2>
+      <div className="grid grid-cols-3 gap-4 mb-8 max-w-xl">
+        {window.GF_ENUMS.medio_pago.map((m) => (
+          <Card key={m.value} className="p-4 text-center">
+            <p className="text-xs text-deep/50">{m.label}</p>
+            <p className="text-lg font-display font-bold text-deep">{money(sumaPorMedio(m.value))}</p>
+          </Card>
+        ))}
+      </div>
+
+      {cierreHoy ? (
+        <Card className="p-6 max-w-xl mb-8">
+          <p className="text-sm font-semibold text-institutional mb-3">La caja de hoy ya está cerrada.</p>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <p className="text-deep/60">Efectivo</p>
+            <p className="text-right font-medium">{money(cierreHoy.total_efectivo)}</p>
+            <p className="text-deep/60">Transferencia</p>
+            <p className="text-right font-medium">{money(cierreHoy.total_transferencia)}</p>
+            <p className="text-deep/60">Billetera virtual</p>
+            <p className="text-right font-medium">{money(cierreHoy.total_billetera)}</p>
+            <p className="text-deep font-semibold">Total general</p>
+            <p className="text-right font-bold">{money(cierreHoy.total_general)}</p>
+          </div>
+          {cierreHoy.observaciones && <p className="text-xs text-deep/50 mt-3">Obs: {cierreHoy.observaciones}</p>}
+        </Card>
+      ) : (
+        <Card className="p-6 max-w-xl mb-8">
+          <form onSubmit={cerrar} className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Efectivo">
+                <input type="number" value={efectivo} onChange={(e) => setEfectivo(e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="Transferencia">
+                <input type="number" value={transferencia} onChange={(e) => setTransferencia(e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="Billetera virtual">
+                <input type="number" value={billetera} onChange={(e) => setBilletera(e.target.value)} className={inputClass} />
+              </Field>
+            </div>
+            <p className="text-sm text-deep/70">
+              Total general: <span className="font-bold text-deep">{money(Number(efectivo) + Number(transferencia) + Number(billetera))}</span>
+            </p>
+            <Field label="Observaciones (diferencias o aclaraciones)">
+              <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} className={inputClass} />
+            </Field>
+            <Button type="submit">Cerrar caja del día</Button>
+          </form>
+        </Card>
+      )}
+
+      <h2 className="font-display font-bold text-lg text-deep mb-3">Historial de cierres de mi sucursal</h2>
+      {historial.length === 0 ? (
+        <EmptyState text="Todavía no hay cierres de caja registrados." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-sm">
+            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-3">Fecha</th>
+                <th className="text-left px-4 py-3">Efectivo</th>
+                <th className="text-left px-4 py-3">Transferencia</th>
+                <th className="text-left px-4 py-3">Billetera</th>
+                <th className="text-left px-4 py-3">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historial.map((c, i) => (
+                <tr key={c.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                  <td className="px-4 py-3 border-t border-deep/5 whitespace-nowrap">{fmtDate(c.fecha)}</td>
+                  <td className="px-4 py-3 border-t border-deep/5">{money(c.total_efectivo)}</td>
+                  <td className="px-4 py-3 border-t border-deep/5">{money(c.total_transferencia)}</td>
+                  <td className="px-4 py-3 border-t border-deep/5">{money(c.total_billetera)}</td>
+                  <td className="px-4 py-3 border-t border-deep/5 font-medium">{money(c.total_general)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   VENTAS CON NUMERACIÓN — Facturas / Presupuestos / Recibos /
+   Remitos / Recibos App (una sola pantalla parametrizada por tipo,
+   igual criterio que "compras" en fábrica: un solo motor de datos,
+   varias puertas de entrada en el sidebar).
+--------------------------------------------------------- */
+const COMPROBANTE_TITULOS = { factura: "Facturas", presupuesto: "Presupuestos", recibo: "Recibos", remito: "Remitos" };
+const COMPROBANTE_SINGULAR = { factura: "Factura", presupuesto: "Presupuesto", recibo: "Recibo", remito: "Remito" };
+const COMPROBANTE_MSG_EMITIDO = {
+  factura: "Factura emitida. Conexión ARCA pendiente de integración.",
+  presupuesto: "Presupuesto emitido.",
+  recibo: "Recibo emitido.",
+  remito: "Remito emitido.",
+};
+const COMPROBANTE_MSG_ANULADO = {
+  factura: "Factura anulada.",
+  presupuesto: "Presupuesto anulado.",
+  recibo: "Recibo anulado.",
+  remito: "Remito anulado.",
+};
+const COMPROBANTE_NUEVO_LABEL = { factura: "Nueva factura", presupuesto: "Nuevo presupuesto", recibo: "Nuevo recibo", remito: "Nuevo remito" };
+
+const ComprobanteScreen = ({ tipo, tabKey, session, bump, showToast, soloLectura }) => {
+  const clientes = GFDB.get("clientes");
+  const productos = GFDB.get("productos");
+  const [clienteId, setClienteId] = useState(clientes[0]?.id || "");
+  const [lineas, setLineas] = useState([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+  const [observaciones, setObservaciones] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [detalleId, setDetalleId] = useState(null);
+
+  const setLinea = (idx, patch) => setLineas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  const addLinea = () => setLineas((prev) => [...prev, { productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+  const removeLinea = (idx) => setLineas((prev) => prev.filter((_, i) => i !== idx));
+  const total = lineas.reduce((acc, l) => acc + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
+
+  const todos = soloLectura
+    ? []
+    : GFDB.query("comprobantes_venta", (c) => c.sucursal_id === session.sucursalId && c.tipo === tipo)
+        .filter((c) => filtroEstado === "todos" || c.estado === filtroEstado)
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const items = lineas
+      .filter((l) => l.productoId && Number(l.cantidad) > 0)
+      .map((l) => ({ productoId: Number(l.productoId), cantidad: Number(l.cantidad), precioUnitario: Number(l.precio) }));
+    if (!clienteId || items.length === 0) return;
+    GFDB.emitirComprobante({ sucursalId: session.sucursalId, usuarioId: session.usuarioId, tipo, clienteId: Number(clienteId), items, observaciones });
+    setLineas([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
+    setObservaciones("");
+    bump();
+    showToast(COMPROBANTE_MSG_EMITIDO[tipo]);
+  };
+
+  const columns = [
+    { key: "numero", label: "Número", render: (c) => `${c.punto_venta}-${String(c.numero).padStart(8, "0")}` },
+    {
+      key: "cliente",
+      label: "Cliente",
+      render: (c) => GFDB.find("clientes", c.cliente_id)?.nombre || "-",
+      searchValue: (c) => GFDB.find("clientes", c.cliente_id)?.nombre || "",
+    },
+    { key: "fecha", label: "Fecha", render: (c) => fmtDate(c.fecha) },
+    { key: "total", label: "Total", render: (c) => money(c.total) },
+    {
+      key: "estado",
+      label: "Estado",
+      render: (c) => (
+        <span className={`text-xs font-semibold ${c.estado === "anulado" ? "text-red-600" : "text-institutional"}`}>
+          {c.estado === "anulado" ? "Anulado" : "Emitido"}
+        </span>
+      ),
+      csvValue: (c) => (c.estado === "anulado" ? "Anulado" : "Emitido"),
+    },
+  ];
+  if (tipo === "factura") {
+    columns.push({
+      key: "arca",
+      label: "ARCA",
+      render: () => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">
+          Pendiente de integración
+        </span>
+      ),
+      csvValue: () => "Pendiente de integración",
+    });
+  }
+
+  const actionsRenderer = (c) => (
+    <RowActions
+      onView={() => setDetalleId(c.id)}
+      onPrint={() => window.print()}
+      deleteLabel="Anular"
+      onDelete={
+        c.estado === "emitido"
+          ? () => {
+              GFDB.anularComprobante(c.id, session.usuarioId);
+              bump();
+              showToast(COMPROBANTE_MSG_ANULADO[tipo], "error");
+            }
+          : undefined
+      }
+    />
+  );
+
+  const comprobanteActivo = detalleId ? GFDB.find("comprobantes_venta", detalleId) : null;
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS[tabKey].n}
+        eyebrow={EYEBROWS[tabKey].label}
+        title={soloLectura ? `${COMPROBANTE_TITULOS[tipo]} (App)` : COMPROBANTE_TITULOS[tipo]}
+        description={
+          soloLectura
+            ? "Recibos generados por clientes desde la app / portal online."
+            : tipo === "factura"
+            ? "Venta a consumidor final con numeración. Conexión ARCA: pendiente de integración."
+            : undefined
+        }
+      />
+
+      {soloLectura ? (
+        <EmptyState text="Todavía no existe un canal de clientes (app/portal) generando recibos — esta vista queda lista para cuando exista." />
+      ) : (
+        <>
+          <ListToolbar onExport={() => exportCSV(`${tipo}s.csv`, columns, todos)} onPrint={() => window.print()} />
+          <FiltersBar
+            filters={[
+              {
+                label: "Estado",
+                value: filtroEstado,
+                onChange: setFiltroEstado,
+                options: [
+                  { value: "todos", label: "Todos" },
+                  { value: "emitido", label: "Emitido" },
+                  { value: "anulado", label: "Anulado" },
+                ],
+              },
+            ]}
+          />
+          <DataTable columns={columns} rows={todos} getRowId={(c) => c.id} actionsRenderer={actionsRenderer} searchPlaceholder="Buscar cliente…" />
+
+          {comprobanteActivo && (
+            <Modal open={true} onClose={() => setDetalleId(null)} title={`${COMPROBANTE_SINGULAR[tipo]} ${comprobanteActivo.punto_venta}-${String(comprobanteActivo.numero).padStart(8, "0")}`}>
+              <p className="text-sm text-deep/60 mb-1">
+                Cliente: <span className="font-medium text-deep">{GFDB.find("clientes", comprobanteActivo.cliente_id)?.nombre}</span>
+              </p>
+              <p className="text-sm text-deep/60 mb-4">Fecha: {fmtDateTime(comprobanteActivo.fecha)}</p>
+              <ul className="divide-y divide-deep/6 mb-4">
+                {GFDB.query("detalle_comprobante_venta", (d) => d.comprobante_id === comprobanteActivo.id).map((l) => (
+                  <li key={l.id} className="py-2 flex items-center justify-between text-sm">
+                    <span>
+                      {GFDB.find("productos", l.producto_id)?.nombre} · {l.cantidad}
+                    </span>
+                    <span className="font-medium">{money(l.subtotal)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-right font-semibold text-deep">Total: {money(comprobanteActivo.total)}</p>
+              {tipo === "factura" && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">
+                  CAE: pendiente — la conexión con ARCA todavía no está integrada.
+                </p>
+              )}
+            </Modal>
+          )}
+
+          <div className="mt-8">
+            <h2 className="font-display font-bold text-lg text-deep mb-3">{COMPROBANTE_NUEVO_LABEL[tipo]}</h2>
+            <Card className="p-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <Field label="Cliente">
+                  <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} className={inputClass}>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <div className="space-y-3">
+                  {lineas.map((l, idx) => (
+                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_140px_auto] gap-3 items-end">
+                      <Field label="Producto">
+                        <select
+                          value={l.productoId}
+                          onChange={(e) => {
+                            const p = GFDB.find("productos", Number(e.target.value));
+                            setLinea(idx, { productoId: e.target.value, precio: p ? p.precio : 0 });
+                          }}
+                          className={inputClass}
+                        >
+                          {productos.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Cantidad">
+                        <input type="number" min="1" value={l.cantidad} onChange={(e) => setLinea(idx, { cantidad: e.target.value })} className={inputClass} />
+                      </Field>
+                      <Field label="Precio unit.">
+                        <input type="number" min="0" value={l.precio} onChange={(e) => setLinea(idx, { precio: e.target.value })} className={inputClass} />
+                      </Field>
+                      {lineas.length > 1 && (
+                        <Button type="button" variant="ghost" onClick={() => removeLinea(idx)}>
+                          Quitar
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button type="button" variant="secondary" onClick={addLinea}>
+                  <PlusIcon /> Agregar producto
+                </Button>
+
+                <div className="flex items-center justify-between pt-2 border-t border-deep/8">
+                  <p className="text-2xl font-display font-bold text-deep">{money(total)}</p>
+                </div>
+
+                <Field label="Observaciones">
+                  <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} className={inputClass} />
+                </Field>
+                <Button type="submit">Emitir {COMPROBANTE_SINGULAR[tipo].toLowerCase()}</Button>
+              </form>
+            </Card>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   COBRANZAS
+--------------------------------------------------------- */
+const CobranzasTab = ({ session, bump, showToast }) => {
+  const clientes = GFDB.get("clientes");
+  const [clienteId, setClienteId] = useState(clientes[0]?.id || "");
+  const [medioPago, setMedioPago] = useState("efectivo");
+  const [monto, setMonto] = useState("");
+  const [observaciones, setObservaciones] = useState("");
+  const [aplicaciones, setAplicaciones] = useState({});
+
+  const comprobantesPendientes = GFDB.query(
+    "comprobantes_venta",
+    (c) => c.sucursal_id === session.sucursalId && c.cliente_id === Number(clienteId) && c.estado === "emitido" && (c.tipo === "factura" || c.tipo === "recibo")
+  );
+
+  const cobranzas = GFDB.query("cobranzas", (c) => c.sucursal_id === session.sucursalId).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const aplicacionesArr = Object.entries(aplicaciones)
+      .filter(([, importe]) => Number(importe) > 0)
+      .map(([comprobanteId, importe]) => ({ comprobanteId: Number(comprobanteId), importe: Number(importe) }));
+    if (!clienteId || !monto || Number(monto) <= 0) return;
+    GFDB.registrarCobranza({
+      sucursalId: session.sucursalId,
+      clienteId: Number(clienteId),
+      usuarioId: session.usuarioId,
+      medioPago,
+      monto: Number(monto),
+      aplicaciones: aplicacionesArr,
+      observaciones,
+    });
+    setMonto("");
+    setObservaciones("");
+    setAplicaciones({});
+    bump();
+    showToast("Cobranza registrada.");
+  };
+
+  const columns = [
+    { key: "fecha", label: "Fecha", render: (c) => fmtDateTime(c.fecha) },
+    {
+      key: "cliente",
+      label: "Cliente",
+      render: (c) => GFDB.find("clientes", c.cliente_id)?.nombre || "-",
+      searchValue: (c) => GFDB.find("clientes", c.cliente_id)?.nombre || "",
+    },
+    { key: "medio", label: "Medio de pago", render: (c) => enumLabel("medio_pago", c.medio_pago) },
+    { key: "monto", label: "Monto", render: (c) => money(c.monto) },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.cobranzas.n} eyebrow={EYEBROWS.cobranzas.label} title="Cobranzas" description="Registrar un cobro y aplicarlo contra facturas o recibos pendientes del cliente." />
+      <Card className="p-6 mb-8">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="Cliente">
+              <select
+                value={clienteId}
+                onChange={(e) => {
+                  setClienteId(e.target.value);
+                  setAplicaciones({});
+                }}
+                className={inputClass}
+              >
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Medio de pago">
+              <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)} className={inputClass}>
+                {window.GF_ENUMS.medio_pago.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Monto cobrado">
+              <input type="number" min="0" value={monto} onChange={(e) => setMonto(e.target.value)} className={inputClass} />
+            </Field>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-2">Aplicar contra comprobantes pendientes</p>
+            {comprobantesPendientes.length === 0 ? (
+              <p className="text-sm text-deep/40">Este cliente no tiene facturas ni recibos pendientes en esta sucursal.</p>
+            ) : (
+              <div className="space-y-2">
+                {comprobantesPendientes.map((c) => (
+                  <div key={c.id} className="flex items-center gap-3">
+                    <span className="text-sm text-deep flex-1">
+                      {COMPROBANTE_SINGULAR[c.tipo]} {c.punto_venta}-{String(c.numero).padStart(8, "0")} · {money(c.total)}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Importe a aplicar"
+                      value={aplicaciones[c.id] || ""}
+                      onChange={(e) => setAplicaciones((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                      className={`${inputClass} w-40`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Field label="Observaciones">
+            <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} className={inputClass} />
+          </Field>
+          <Button type="submit">Registrar cobranza</Button>
+        </form>
+      </Card>
+
+      <h2 className="font-display font-bold text-lg text-deep mb-3">Historial de cobranzas</h2>
+      <DataTable columns={columns} rows={cobranzas} getRowId={(c) => c.id} searchPlaceholder="Buscar cliente…" />
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   LISTAS DE PRECIOS
+--------------------------------------------------------- */
+const ListasPreciosTab = ({ bump, showToast }) => {
+  const listas = GFDB.get("listas_precios");
+  const productos = GFDB.get("productos");
+  const [nombreNueva, setNombreNueva] = useState("");
+  const [listaEditando, setListaEditando] = useState(null);
+
+  const crearLista = (e) => {
+    e.preventDefault();
+    if (!nombreNueva.trim()) return;
+    GFDB.insert("listas_precios", { nombre: nombreNueva, es_predeterminada: false });
+    setNombreNueva("");
+    bump();
+    showToast("Lista de precios creada.");
+  };
+
+  const precioEnLista = (listaId, productoId) => {
+    const item = GFDB.query("lista_precios_items", (i) => i.lista_id === listaId && i.producto_id === productoId)[0];
+    return item ? item.precio : GFDB.find("productos", productoId).precio;
+  };
+
+  const guardarPrecio = (listaId, productoId, precio) => {
+    const item = GFDB.query("lista_precios_items", (i) => i.lista_id === listaId && i.producto_id === productoId)[0];
+    if (item) GFDB.update("lista_precios_items", item.id, { precio });
+    else GFDB.insert("lista_precios_items", { lista_id: listaId, producto_id: productoId, precio });
+    bump();
+  };
+
+  const listaActiva = listaEditando ? GFDB.find("listas_precios", listaEditando) : null;
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS["listas-precios"].n}
+        eyebrow={EYEBROWS["listas-precios"].label}
+        title="Listas de Precios"
+        description="El punto de venta sigue usando el precio base del producto — elegir la lista al vender queda para una próxima etapa."
+      />
+      <Card className="p-6 mb-8 max-w-lg">
+        <form onSubmit={crearLista} className="flex items-end gap-3">
+          <Field label="Nueva lista">
+            <input value={nombreNueva} onChange={(e) => setNombreNueva(e.target.value)} className={inputClass} placeholder="Ej: Mayorista" />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Crear
+          </Button>
+        </form>
+      </Card>
+
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Lista</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {listas.map((l, i) => (
+              <tr key={l.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">
+                  {l.nombre} {l.es_predeterminada && <span className="text-xs text-deep/40 font-normal">(predeterminada)</span>}
+                </td>
+                <td className="px-4 py-3 border-t border-deep/5 text-right">
+                  <Button variant="secondary" onClick={() => setListaEditando(l.id)}>
+                    Editar precios
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+
+      <Modal open={!!listaActiva} onClose={() => setListaEditando(null)} title={listaActiva ? `Precios — ${listaActiva.nombre}` : ""} wide>
+        {listaActiva && (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {productos.map((p) => (
+              <div key={p.id} className="flex items-center gap-3">
+                <span className="text-sm text-deep flex-1">{p.nombre}</span>
+                <input
+                  type="number"
+                  defaultValue={precioEnLista(listaActiva.id, p.id)}
+                  onBlur={(e) => guardarPrecio(listaActiva.id, p.id, Number(e.target.value))}
+                  className={`${inputClass} w-32`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   TRANSFERENCIAS DE STOCK (recibir, del lado sucursal)
+--------------------------------------------------------- */
+const TransferenciasTab = ({ session, bump, showToast }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const transferencias = GFDB.query("transferencias_stock", (t) => t.destino_ubicacion_id === ubicacion.id).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+
+  const columns = [
+    { key: "fecha", label: "Fecha", render: (t) => fmtDate(t.fecha) },
+    { key: "origen", label: "Origen", render: (t) => GFDB.find("ubicaciones_stock", t.origen_ubicacion_id)?.nombre || "-" },
+    {
+      key: "items",
+      label: "Productos",
+      render: (t) =>
+        GFDB.query("detalle_transferencia_stock", (d) => d.transferencia_id === t.id)
+          .map((d) => `${GFDB.find("productos", d.producto_id).nombre} (${d.cantidad})`)
+          .join(", "),
+    },
+    {
+      key: "estado",
+      label: "Estado",
+      render: (t) => (
+        <span className={`text-xs font-semibold ${t.estado === "recibido" ? "text-institutional" : "text-amber-600"}`}>
+          {enumLabel("estado_transferencia", t.estado)}
+        </span>
+      ),
+      csvValue: (t) => enumLabel("estado_transferencia", t.estado),
+    },
+  ];
+
+  const actionsRenderer = (t) =>
+    t.estado === "enviado" ? (
+      <div className="flex justify-end">
+        <MiniButton
+          onClick={() => {
+            GFDB.recibirTransferencia(t.id, session.usuarioId);
+            bump();
+            showToast("Transferencia recibida. Stock actualizado.");
+          }}
+        >
+          Recibir
+        </MiniButton>
+      </div>
+    ) : null;
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS.transferencias.n}
+        eyebrow={EYEBROWS.transferencias.label}
+        title="Transferencias de Stock"
+        description={`Ingresos de mercadería hacia ${ubicacion.nombre} desde fábrica.`}
+      />
+      <DataTable columns={columns} rows={transferencias} getRowId={(t) => t.id} actionsRenderer={actionsRenderer} searchPlaceholder="Buscar producto…" />
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   CATÁLOGOS DE REFERENCIA — Categorías / Marcas / Grupos / Variantes / Depósitos
+   (formulario simple + tabla liviana, no el patrón completo de listado —
+   mismo criterio que Ajustar Stock/Catálogo)
+--------------------------------------------------------- */
+const CategoriasTab = ({ bump, showToast }) => {
+  const categorias = GFDB.get("categorias");
+  const [nombre, setNombre] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    GFDB.insert("categorias", { nombre, descripcion });
+    setNombre("");
+    setDescripcion("");
+    bump();
+    showToast("Categoría creada.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.categorias.n} eyebrow={EYEBROWS.categorias.label} title="Categorías" />
+      <Card className="p-6 mb-6 max-w-xl">
+        <form onSubmit={crear} className="flex flex-wrap items-end gap-3">
+          <Field label="Nombre">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Descripción">
+            <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={inputClass} />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Agregar
+          </Button>
+        </form>
+      </Card>
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Nombre</th>
+              <th className="text-left px-4 py-3">Descripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categorias.map((c, i) => (
+              <tr key={c.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{c.nombre}</td>
+                <td className="px-4 py-3 border-t border-deep/5 text-deep/50">{c.descripcion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+    </div>
+  );
+};
+
+const MarcasTab = ({ bump, showToast }) => {
+  const marcas = GFDB.get("marcas");
+  const [nombre, setNombre] = useState("");
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    GFDB.insert("marcas", { nombre });
+    setNombre("");
+    bump();
+    showToast("Marca creada.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.marcas.n} eyebrow={EYEBROWS.marcas.label} title="Marcas" />
+      <Card className="p-6 mb-6 max-w-lg">
+        <form onSubmit={crear} className="flex items-end gap-3">
+          <Field label="Nombre">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Agregar
+          </Button>
+        </form>
+      </Card>
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Nombre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {marcas.map((m, i) => (
+              <tr key={m.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{m.nombre}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+    </div>
+  );
+};
+
+const GruposTab = ({ bump, showToast }) => {
+  const grupos = GFDB.get("grupos");
+  const [nombre, setNombre] = useState("");
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    GFDB.insert("grupos", { nombre });
+    setNombre("");
+    bump();
+    showToast("Grupo creado.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.grupos.n} eyebrow={EYEBROWS.grupos.label} title="Grupos" />
+      <Card className="p-6 mb-6 max-w-lg">
+        <form onSubmit={crear} className="flex items-end gap-3">
+          <Field label="Nombre">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Agregar
+          </Button>
+        </form>
+      </Card>
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Nombre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grupos.map((g, i) => (
+              <tr key={g.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{g.nombre}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+    </div>
+  );
+};
+
+const VariantesTab = ({ bump, showToast }) => {
+  const productos = GFDB.get("productos");
+  const variantes = GFDB.get("producto_variantes");
+  const [productoId, setProductoId] = useState(productos[0]?.id || "");
+  const [nombre, setNombre] = useState("");
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim() || !productoId) return;
+    GFDB.insert("producto_variantes", { producto_id: Number(productoId), nombre });
+    setNombre("");
+    bump();
+    showToast("Variante agregada.");
+  };
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS.variantes.n}
+        eyebrow={EYEBROWS.variantes.label}
+        title="Variantes"
+        description="Catálogo de variantes por producto. Todavía no está conectado a stock ni a precios — es solo referencia."
+      />
+      <Card className="p-6 mb-6 max-w-xl">
+        <form onSubmit={crear} className="flex flex-wrap items-end gap-3">
+          <Field label="Producto">
+            <select value={productoId} onChange={(e) => setProductoId(e.target.value)} className={inputClass}>
+              {productos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Variante">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} placeholder="Ej: Bolsa 25kg" />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Agregar
+          </Button>
+        </form>
+      </Card>
+      {variantes.length === 0 ? (
+        <EmptyState text="Todavía no hay variantes cargadas." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-sm">
+            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-3">Producto</th>
+                <th className="text-left px-4 py-3">Variante</th>
+              </tr>
+            </thead>
+            <tbody>
+              {variantes.map((v, i) => (
+                <tr key={v.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                  <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{GFDB.find("productos", v.producto_id)?.nombre}</td>
+                  <td className="px-4 py-3 border-t border-deep/5">{v.nombre}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
+    </div>
+  );
+};
+
+const DepositosTab = ({ session, bump, showToast }) => {
+  const depositos = GFDB.query("ubicaciones_stock", (u) => u.tipo === "sucursal" && u.sucursal_id === session.sucursalId);
+  const [nombre, setNombre] = useState("");
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    GFDB.insert("ubicaciones_stock", { nombre, tipo: "sucursal", sucursal_id: session.sucursalId });
+    setNombre("");
+    bump();
+    showToast("Depósito creado.");
+  };
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.depositos.n} eyebrow={EYEBROWS.depositos.label} title="Depósitos" description="Depósitos de esta sucursal." />
+      <Card className="p-6 mb-6 max-w-lg">
+        <form onSubmit={crear} className="flex items-end gap-3">
+          <Field label="Nombre">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} placeholder="Ej: Depósito 2" />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Agregar
+          </Button>
+        </form>
+      </Card>
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Nombre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {depositos.map((d, i) => (
+              <tr key={d.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{d.nombre}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   LISTA DE PRODUCTOS — solo lectura (empleado)
+--------------------------------------------------------- */
+const CatalogoConsultaTab = ({ session }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const productos = GFDB.get("productos");
+  const columns = [
+    { key: "nombre", label: "Producto", render: (p) => p.nombre },
+    { key: "categoria", label: "Categoría", render: (p) => GFDB.find("categorias", p.categoria_id)?.nombre || "-" },
+    { key: "precio", label: "Precio", render: (p) => money(p.precio) },
+    {
+      key: "stock",
+      label: "Stock en mi sucursal",
+      render: (p) => GFDB.stockDeProducto(p.id, ubicacion.id)?.cantidad_actual ?? "-",
+    },
+    { key: "visible", label: "Visible para clientes", render: (p) => (p.visible ? "Sí" : "No") },
+  ];
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["catalogo-consulta"].n} eyebrow={EYEBROWS["catalogo-consulta"].label} title="Lista de productos" description="Consulta de precios y stock — solo lectura." />
+      <DataTable columns={columns} rows={productos} getRowId={(p) => p.id} searchPlaceholder="Buscar producto…" />
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   CLIENTES
+--------------------------------------------------------- */
+const ClientesTab = ({ bump, showToast }) => {
+  const clientes = GFDB.get("clientes");
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim()) return;
+    GFDB.insert("clientes", { nombre, telefono, email });
+    setNombre("");
+    setTelefono("");
+    setEmail("");
+    setNuevoAbierto(false);
+    bump();
+    showToast("Cliente creado.");
+  };
+
+  const columns = [
+    { key: "nombre", label: "Nombre", render: (c) => c.nombre },
+    { key: "telefono", label: "Teléfono", render: (c) => c.telefono || "-" },
+    { key: "email", label: "Email", render: (c) => c.email || "-" },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS.clientes.n} eyebrow={EYEBROWS.clientes.label} title="Clientes" />
+      <ListToolbar onNew={() => setNuevoAbierto(true)} newLabel="Nuevo cliente" onExport={() => exportCSV("clientes.csv", columns, clientes)} onPrint={() => window.print()} />
+      <DataTable columns={columns} rows={clientes} getRowId={(c) => c.id} searchPlaceholder="Buscar cliente…" />
+
+      <Modal open={nuevoAbierto} onClose={() => setNuevoAbierto(false)} title="Nuevo cliente">
+        <form onSubmit={crear} className="space-y-4">
+          <Field label="Nombre">
+            <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Teléfono">
+            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Email">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+          </Field>
+          <Button type="submit">
+            <PlusIcon /> Crear cliente
+          </Button>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   PLACEHOLDER HONESTO — Caja (cheques/cuentas/tarjetas/conceptos) y
+   Contabilidad (13 ítems). Pantallas reales de navegación; el contenido
+   dice "Próximamente" en vez de simular algo que no está construido.
+--------------------------------------------------------- */
+const ProximamenteTab = ({ eyebrowNumber, eyebrow, titulo, descripcion }) => (
+  <div>
+    <SectionBar eyebrowNumber={eyebrowNumber} eyebrow={eyebrow} title={titulo} />
+    <Card className="p-10 text-center">
+      <p className="text-sm text-deep/50 max-w-md mx-auto">
+        {descripcion || "Esta pantalla todavía no está construida — queda planificada para una etapa siguiente del roadmap hacia Fidel."}
+      </p>
+    </Card>
+  </div>
+);
+
+/* ---------------------------------------------------------
+   ESTADÍSTICAS
+--------------------------------------------------------- */
+const ESTADOS_VENTA_CONTABLE = ["confirmado", "en_preparacion", "listo_retiro", "pendiente_envio", "finalizado"];
+
+const EstadisticasClientesTab = ({ session }) => {
+  const totales = {};
+  GFDB.query("pedidos", (p) => p.sucursal_id === session.sucursalId && ESTADOS_VENTA_CONTABLE.includes(p.estado)).forEach((p) => {
+    totales[p.cliente_id] = (totales[p.cliente_id] || 0) + p.total;
+  });
+  GFDB.query("comprobantes_venta", (c) => c.sucursal_id === session.sucursalId && c.estado === "emitido" && c.tipo !== "presupuesto").forEach((c) => {
+    totales[c.cliente_id] = (totales[c.cliente_id] || 0) + c.total;
+  });
+  const filas = Object.entries(totales)
+    .map(([clienteId, total]) => ({ id: Number(clienteId), cliente: GFDB.find("clientes", Number(clienteId)), total }))
+    .filter((f) => f.cliente)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  const columns = [
+    { key: "cliente", label: "Cliente", render: (f) => f.cliente.nombre },
+    { key: "total", label: "Total comprado", render: (f) => money(f.total) },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["stats-clientes"].n} eyebrow={EYEBROWS["stats-clientes"].label} title="Top clientes" description="Suma de pedidos confirmados en adelante + comprobantes emitidos (no presupuestos)." />
+      {filas.length === 0 ? <EmptyState text="Todavía no hay datos suficientes." /> : <DataTable columns={columns} rows={filas} getRowId={(f) => f.id} searchPlaceholder="Buscar cliente…" />}
+    </div>
+  );
+};
+
+const EstadisticasProductosTab = ({ session }) => {
+  const ubicacion = GFDB.ubicacionDeSucursal(session.sucursalId);
+  const cantidades = {};
+  GFDB.query("detalle_ventas", (d) => GFDB.find("ventas", d.venta_id)?.sucursal_id === session.sucursalId).forEach((d) => {
+    cantidades[d.producto_id] = (cantidades[d.producto_id] || 0) + d.cantidad;
+  });
+  GFDB.query("detalle_pedidos", (d) => {
+    const pedido = GFDB.find("pedidos", d.pedido_id);
+    return pedido && pedido.sucursal_id === session.sucursalId && ESTADOS_VENTA_CONTABLE.includes(pedido.estado);
+  }).forEach((d) => {
+    cantidades[d.producto_id] = (cantidades[d.producto_id] || 0) + d.cantidad;
+  });
+  GFDB.query("detalle_comprobante_venta", (d) => {
+    const c = GFDB.find("comprobantes_venta", d.comprobante_id);
+    return c && c.sucursal_id === session.sucursalId && c.estado === "emitido" && c.tipo !== "presupuesto";
+  }).forEach((d) => {
+    cantidades[d.producto_id] = (cantidades[d.producto_id] || 0) + d.cantidad;
+  });
+  const filas = Object.entries(cantidades)
+    .map(([productoId, cantidad]) => ({ id: Number(productoId), producto: GFDB.find("productos", Number(productoId)), cantidad }))
+    .filter((f) => f.producto)
+    .sort((a, b) => b.cantidad - a.cantidad)
+    .slice(0, 10);
+
+  const columns = [
+    { key: "producto", label: "Producto", render: (f) => f.producto.nombre },
+    { key: "cantidad", label: "Unidades vendidas", render: (f) => f.cantidad },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["stats-productos"].n} eyebrow={EYEBROWS["stats-productos"].label} title="Top productos" description={`Ventas presenciales + pedidos + comprobantes de ${ubicacion.nombre}.`} />
+      {filas.length === 0 ? <EmptyState text="Todavía no hay datos suficientes." /> : <DataTable columns={columns} rows={filas} getRowId={(f) => f.id} searchPlaceholder="Buscar producto…" />}
+    </div>
+  );
+};
+
+const EstadisticasVentasTab = ({ session }) => {
+  const ventas = GFDB.query("ventas", (v) => v.sucursal_id === session.sucursalId).map((v) => ({
+    id: `venta-${v.id}`,
+    fecha: v.fecha_hora,
+    tipo: "Venta presencial",
+    total: v.total,
+  }));
+  const comprobantes = GFDB.query("comprobantes_venta", (c) => c.sucursal_id === session.sucursalId && c.estado === "emitido" && c.tipo !== "presupuesto").map((c) => ({
+    id: `comp-${c.id}`,
+    fecha: c.fecha,
+    tipo: COMPROBANTE_SINGULAR[c.tipo],
+    total: c.total,
+  }));
+  const filas = [...ventas, ...comprobantes].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+  const columns = [
+    { key: "fecha", label: "Fecha", render: (f) => fmtDateTime(f.fecha) },
+    { key: "tipo", label: "Tipo", render: (f) => f.tipo },
+    { key: "total", label: "Total", render: (f) => money(f.total) },
+  ];
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["stats-ventas"].n} eyebrow={EYEBROWS["stats-ventas"].label} title="Ventas" description="Ventas presenciales y comprobantes emitidos, combinados." />
+      {filas.length === 0 ? <EmptyState text="Todavía no hay ventas registradas." /> : <DataTable columns={columns} rows={filas} getRowId={(f) => f.id} searchPlaceholder="Buscar…" />}
+    </div>
+  );
+};
+
+const EstadisticasPresupuestosTab = ({ session }) => {
+  const presupuestos = GFDB.query("comprobantes_venta", (c) => c.sucursal_id === session.sucursalId && c.tipo === "presupuesto");
+  const facturas = GFDB.query("comprobantes_venta", (c) => c.sucursal_id === session.sucursalId && c.tipo === "factura");
+  const totalPresupuestado = presupuestos.reduce((acc, c) => acc + c.total, 0);
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["stats-presupuestos"].n} eyebrow={EYEBROWS["stats-presupuestos"].label} title="Presupuestos" />
+      <div className="grid sm:grid-cols-3 gap-4">
+        <KpiCard icon={<ClipboardIcon />} color="#00AE4C" label="Presupuestos emitidos" value={presupuestos.length} />
+        <KpiCard icon={<CheckIcon />} color="#29683D" label="Facturas emitidas" value={facturas.length} />
+        <KpiCard icon={<CashIcon />} color="#1A312B" label="Total presupuestado" value={money(totalPresupuestado)} />
+      </div>
+      <p className="text-xs text-deep/40 mt-4 max-w-md">
+        Todavía no se vincula un presupuesto puntual con la factura que lo termina reemplazando — por eso no hay una tasa de conversión, solo los totales de cada uno.
+      </p>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   CONFIGURACIONES — Usuarios / Roles / Integraciones (reales);
+   Emails/Leyendas/Reportes usan el mismo placeholder que Contabilidad.
+--------------------------------------------------------- */
+const UsuariosTab = ({ session, bump, showToast }) => {
+  const usuarios = GFDB.get("usuarios");
+  const roles = GFDB.get("roles");
+  const sucursales = GFDB.get("sucursales");
+  const [nombre, setNombre] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rolId, setRolId] = useState(roles[0]?.id || "");
+  const [sucursalId, setSucursalId] = useState(session.sucursalId || "");
+  const [nuevoAbierto, setNuevoAbierto] = useState(false);
+
+  const rolElegido = roles.find((r) => r.id === Number(rolId));
+  const esFabrica = rolElegido?.nombre === "administrativo_fabrica";
+
+  const crear = (e) => {
+    e.preventDefault();
+    if (!nombre.trim() || !email.trim() || !password.trim()) return;
+    GFDB.insert("usuarios", { nombre, email, password, rol_id: Number(rolId), sucursal_id: esFabrica ? null : Number(sucursalId), activo: true });
+    setNombre("");
+    setEmail("");
+    setPassword("");
+    setNuevoAbierto(false);
+    bump();
+    showToast("Usuario creado.");
+  };
+
+  const columns = [
+    { key: "nombre", label: "Nombre", render: (u) => u.nombre },
+    { key: "email", label: "Email", render: (u) => u.email },
+    { key: "rol", label: "Rol", render: (u) => ROLE_LABELS[GFDB.find("roles", u.rol_id)?.nombre] || "-" },
+    { key: "sucursal", label: "Sucursal", render: (u) => GFDB.find("sucursales", u.sucursal_id)?.nombre || "Fábrica" },
+    {
+      key: "estado",
+      label: "Estado",
+      render: (u) => <span className={`text-xs font-semibold ${u.activo ? "text-institutional" : "text-deep/40"}`}>{u.activo ? "Activo" : "Inactivo"}</span>,
+      csvValue: (u) => (u.activo ? "Activo" : "Inactivo"),
+    },
+  ];
+
+  const actionsRenderer = (u) => (
+    <RowActions
+      onDelete={() => {
+        GFDB.update("usuarios", u.id, { activo: !u.activo });
+        bump();
+        showToast(u.activo ? "Usuario desactivado." : "Usuario reactivado.");
+      }}
+      deleteIcon={PowerIcon}
+      deleteLabel={u.activo ? "Desactivar" : "Activar"}
+    />
+  );
+
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["config-usuarios"].n} eyebrow={EYEBROWS["config-usuarios"].label} title="Usuarios" description="Usuarios internos autorizados a acceder al panel." />
+      <ListToolbar onNew={() => setNuevoAbierto(true)} newLabel="Nuevo usuario" onExport={() => exportCSV("usuarios.csv", columns, usuarios)} />
+      <DataTable columns={columns} rows={usuarios} getRowId={(u) => u.id} actionsRenderer={actionsRenderer} searchPlaceholder="Buscar usuario…" />
+
+      <Modal open={nuevoAbierto} onClose={() => setNuevoAbierto(false)} title="Nuevo usuario">
+        <form onSubmit={crear} className="space-y-4">
+          <Field label="Nombre">
+            <input required value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Email">
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Contraseña">
+            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Rol">
+            <select value={rolId} onChange={(e) => setRolId(e.target.value)} className={inputClass}>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {ROLE_LABELS[r.nombre]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {!esFabrica && (
+            <Field label="Sucursal">
+              <select value={sucursalId} onChange={(e) => setSucursalId(e.target.value)} className={inputClass}>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <Button type="submit">
+            <PlusIcon /> Crear usuario
+          </Button>
+        </form>
+      </Modal>
+    </div>
+  );
+};
+
+const RolesTab = () => {
+  const roles = GFDB.get("roles");
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["config-roles"].n} eyebrow={EYEBROWS["config-roles"].label} title="Roles" description="Roles fijos del sistema — no se crean roles nuevos desde acá." />
+      <TableWrap>
+        <table className="w-full text-sm">
+          <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+            <tr>
+              <th className="text-left px-4 py-3">Rol</th>
+              <th className="text-left px-4 py-3">Descripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((r, i) => (
+              <tr key={r.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                <td className="px-4 py-3 border-t border-deep/5 font-medium text-deep">{ROLE_LABELS[r.nombre]}</td>
+                <td className="px-4 py-3 border-t border-deep/5 text-deep/50">{r.descripcion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+    </div>
+  );
+};
+
+const IntegracionesTab = ({ session }) => {
+  const sucursal = GFDB.find("sucursales", session.sucursalId);
+  return (
+    <div>
+      <SectionBar eyebrowNumber={EYEBROWS["config-integraciones"].n} eyebrow={EYEBROWS["config-integraciones"].label} title="Integraciones" />
+      <Card className="p-6 max-w-lg">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="w-11 h-11 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+            <PlugIcon className="w-5 h-5" />
+          </span>
+          <div>
+            <p className="font-semibold text-deep">Conexión ARCA</p>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">Pendiente de integración</span>
+          </div>
+        </div>
+        <p className="text-sm text-deep/60 mb-1">
+          CUIT de esta sucursal: <span className="font-medium text-deep">{sucursal.cuit}</span>
+        </p>
+        <p className="text-xs text-deep/45 mt-3">
+          Cada sucursal tiene su propia conexión ARCA con su propio CUIT — nunca se comparte ni se consolida con otra sucursal ni con fábrica. La numeración y el circuito de facturas ya están construidos; falta conectar la API real de ARCA para autorizar comprobantes (CAE) automáticamente.
+        </p>
+      </Card>
+    </div>
+  );
+};
+
+/* ---------------------------------------------------------
+   APP
+--------------------------------------------------------- */
+const SucursalApp = () => {
+  const [session] = useState(() => GFAuth.requireRole(["empleado_sucursal", "responsable_sucursal"]));
+  const [tab, setTab] = useState(() => (session?.rolNombre === "empleado_sucursal" ? "clientes" : "dashboard"));
+  const [tick, setTick] = useState(0);
+  const [toast, setToast] = useState(null);
+
+  const bump = () => setTick((t) => t + 1);
+  const showToast = (message, kind = "success") => {
+    setToast({ message, kind });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  if (!session) return null;
+
+  const modules = modulosParaRol(session.rolNombre);
+  const quickAccess = quickAccessParaRol(session.rolNombre);
+  const notifCount = GFDB.query("pedidos", (p) => p.sucursal_id === session.sucursalId && p.estado === "pendiente").length;
+
+  let content;
+  if (tab === "dashboard") content = <DashboardSucursalTab session={session} onNavigate={setTab} />;
+  else if (tab === "stock") content = <StockTab session={session} />;
+  else if (tab === "ingreso") content = <IngresoTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "pedidos") content = <PedidosTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "ventas") content = <VentasTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "ajuste" && session.rolNombre === "responsable_sucursal") content = <AjusteTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "catalogo" && session.rolNombre === "responsable_sucursal") content = <CatalogoTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "caja" && session.rolNombre === "responsable_sucursal") content = <CajaTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "catalogo-consulta") content = <CatalogoConsultaTab session={session} />;
+  else if (tab === "transferencias") content = <TransferenciasTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "venta-facturas" && session.rolNombre === "responsable_sucursal")
+    content = <ComprobanteScreen tipo="factura" tabKey="venta-facturas" session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "venta-presupuestos" && session.rolNombre === "responsable_sucursal")
+    content = <ComprobanteScreen tipo="presupuesto" tabKey="venta-presupuestos" session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "venta-recibos" && session.rolNombre === "responsable_sucursal")
+    content = <ComprobanteScreen tipo="recibo" tabKey="venta-recibos" session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "venta-remitos" && session.rolNombre === "responsable_sucursal")
+    content = <ComprobanteScreen tipo="remito" tabKey="venta-remitos" session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "venta-recibos-app") content = <ComprobanteScreen tipo="recibo" tabKey="venta-recibos-app" session={session} bump={bump} showToast={showToast} soloLectura />;
+  else if (tab === "cobranzas" && session.rolNombre === "responsable_sucursal") content = <CobranzasTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "listas-precios" && session.rolNombre === "responsable_sucursal") content = <ListasPreciosTab bump={bump} showToast={showToast} />;
+  else if (tab === "categorias" && session.rolNombre === "responsable_sucursal") content = <CategoriasTab bump={bump} showToast={showToast} />;
+  else if (tab === "marcas" && session.rolNombre === "responsable_sucursal") content = <MarcasTab bump={bump} showToast={showToast} />;
+  else if (tab === "grupos" && session.rolNombre === "responsable_sucursal") content = <GruposTab bump={bump} showToast={showToast} />;
+  else if (tab === "variantes" && session.rolNombre === "responsable_sucursal") content = <VariantesTab bump={bump} showToast={showToast} />;
+  else if (tab === "depositos" && session.rolNombre === "responsable_sucursal") content = <DepositosTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "clientes") content = <ClientesTab bump={bump} showToast={showToast} />;
+  else if (tab === "stats-clientes" && session.rolNombre === "responsable_sucursal") content = <EstadisticasClientesTab session={session} />;
+  else if (tab === "stats-productos" && session.rolNombre === "responsable_sucursal") content = <EstadisticasProductosTab session={session} />;
+  else if (tab === "stats-ventas" && session.rolNombre === "responsable_sucursal") content = <EstadisticasVentasTab session={session} />;
+  else if (tab === "stats-presupuestos" && session.rolNombre === "responsable_sucursal") content = <EstadisticasPresupuestosTab session={session} />;
+  else if (tab === "config-usuarios" && session.rolNombre === "responsable_sucursal") content = <UsuariosTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "config-roles" && session.rolNombre === "responsable_sucursal") content = <RolesTab />;
+  else if (tab === "config-integraciones" && session.rolNombre === "responsable_sucursal") content = <IntegracionesTab session={session} />;
+  else if (session.rolNombre === "responsable_sucursal" && CAJA_PLACEHOLDER_ITEMS.some((it) => it.key === tab)) {
+    const it = CAJA_PLACEHOLDER_ITEMS.find((i) => i.key === tab);
+    content = (
+      <ProximamenteTab
+        eyebrowNumber={EYEBROWS[tab].n}
+        eyebrow={EYEBROWS[tab].label}
+        titulo={it.label}
+        descripcion="Todavía no está construido — queda planificado para la etapa de Caja ampliada del roadmap."
+      />
+    );
+  } else if (session.rolNombre === "responsable_sucursal" && CONTABILIDAD_ITEMS.some((it) => it.key === tab)) {
+    const it = CONTABILIDAD_ITEMS.find((i) => i.key === tab);
+    content = (
+      <ProximamenteTab
+        eyebrowNumber={EYEBROWS[tab].n}
+        eyebrow={EYEBROWS[tab].label}
+        titulo={it.label}
+        descripcion={`Bajo el CUIT propio de esta sucursal (${GFDB.find("sucursales", session.sucursalId)?.cuit}) — nunca consolidado con otra sucursal ni fábrica. Motor contable planificado para una etapa siguiente del roadmap.`}
+      />
+    );
+  } else if (session.rolNombre === "responsable_sucursal" && ["config-emails", "config-leyendas", "config-reportes"].includes(tab)) {
+    const it = CONFIG_ITEMS.find((i) => i.key === tab);
+    content = <ProximamenteTab eyebrowNumber={EYEBROWS[tab].n} eyebrow={EYEBROWS[tab].label} titulo={it.label} />;
+  } else if (session.rolNombre === "empleado_sucursal") content = <ClientesTab bump={bump} showToast={showToast} />;
+  else content = <DashboardSucursalTab session={session} onNavigate={setTab} />;
+
+  return (
+    <PrivateShell
+      session={session}
+      modules={modules}
+      quickAccess={quickAccess}
+      activeKey={tab}
+      onNavigate={setTab}
+      notifCount={notifCount}
+      onLogout={GFAuth.logout}
+    >
+      {content}
+      <Toast message={toast?.message} kind={toast?.kind} onClose={() => setToast(null)} />
+    </PrivateShell>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<SucursalApp />);
+</script>
+
+<script>
+  (function () {
+    var source = document.getElementById("app-source").textContent;
+    try {
+      var output = Babel.transform(source, {
+        presets: [["react", { runtime: "classic" }]],
+        filename: "app.jsx",
+      }).code;
+      (0, eval)(output);
+    } catch (err) {
+      var root = document.getElementById("root");
+      root.innerHTML =
+        '<pre style="white-space:pre-wrap;padding:24px;color:#b91c1c;font-family:monospace;">' +
+        "Error al inicializar el prototipo:\n\n" +
+        String(err && err.stack ? err.stack : err) +
+        "</pre>";
+      console.error(err);
+    }
+  })();
+</script>
+</body>
+</html>
