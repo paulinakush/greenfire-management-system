@@ -1,0 +1,1013 @@
+// Green Fire — modelo de datos
+// Fuente de verdad única del modelo. Se apoya en el informe original
+// (docs/SegundoIndormePP.pdf) y en docs/complemento.md; si se contradicen,
+// manda el complemento.
+//
+// Decisiones de diseño:
+// - Ámbitos: la fábrica y cada local son un ámbito, cada uno con su entidad
+//   fiscal. Un usuario puede tener un perfil distinto en cada ámbito.
+// - Perfiles fijos (no hay tabla de permisos): se validan en el servidor.
+// - Artículos: insumos, productos terminados y mercadería de reventa en una
+//   sola tabla, con un único stock y un único registro de movimientos.
+// - Todo movimiento de mercadería entre ámbitos es una entrega con precio y
+//   comprobante; no existen transferencias sin precio.
+// - El stock actual es la suma de los movimientos. El lote viaja en los
+//   movimientos y en el detalle de cada entrega; no hay stock por lote.
+// - La venta es la operación; el comprobante fiscal es opcional.
+// - Los saldos (clientes, proveedores, fábrica-local) se calculan desde
+//   movimientos y nunca se guardan como valor editable.
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+Enum tipo_ambito {
+  fabrica
+  local
+}
+
+Enum perfil_usuario {
+  dueno_fabrica
+  dueno_local
+  empleado_local
+}
+
+Enum condicion_iva {
+  responsable_inscripto
+  monotributo
+  exento
+  consumidor_final
+}
+
+Enum tipo_articulo {
+  insumo
+  producto_terminado
+  reventa
+}
+
+Enum estado_pedido {
+  pendiente
+  confirmado
+  rechazado
+  en_preparacion
+  listo_retiro
+  pendiente_envio
+  finalizado
+  cancelado
+  vencido
+}
+
+Enum estado_pago_pedido {
+  no_habilitado
+  habilitado
+  pagado
+}
+
+Enum modalidad_entrega {
+  retiro_sucursal
+  envio_coordinado
+}
+
+Enum medio_pago {
+  efectivo
+  transferencia
+  billetera_virtual
+  cuenta_corriente
+}
+
+Enum estado_reserva {
+  activa
+  consumida
+  liberada
+}
+
+Enum tipo_movimiento_stock {
+  venta
+  entrega_pedido
+  compra
+  entrega_salida
+  entrega_recepcion
+  produccion_consumo
+  produccion_ingreso
+  ajuste
+  conteo
+  anulacion
+  devolucion
+}
+
+Enum estado_venta {
+  confirmada
+  anulada
+}
+
+Enum tipo_comprobante {
+  factura
+  nota_credito
+  remito
+  recibo
+  presupuesto
+}
+
+Enum letra_comprobante {
+  A
+  B
+  C
+  X
+}
+
+Enum estado_comprobante {
+  emitido
+  anulado
+}
+
+Enum arca_estado {
+  pendiente
+  autorizado
+  rechazado
+}
+
+Enum estado_entrega {
+  enviada
+  recibida
+  diferencia_informada
+}
+
+Enum tipo_movimiento_cc {
+  venta
+  entrega
+  cobranza
+  nota_credito
+  ajuste
+}
+
+Enum estado_caja {
+  abierta
+  cerrada
+}
+
+Enum tipo_movimiento_caja {
+  ingreso
+  egreso
+}
+
+Enum tipo_compra {
+  insumos_produccion
+  mercaderia_reventa
+}
+
+Enum estado_orden_compra {
+  borrador
+  enviada
+  recibida
+  cancelada
+}
+
+Enum estado_lote {
+  abierto
+  cerrado
+}
+
+Enum estado_conteo {
+  abierto
+  cerrado
+}
+
+// ---------------------------------------------------------------------------
+// Entidades fiscales, ámbitos y usuarios
+// ---------------------------------------------------------------------------
+
+Table entidades_fiscales {
+  id int [pk, increment]
+  razon_social varchar
+  cuit varchar [unique]
+  condicion_iva condicion_iva
+  domicilio_fiscal varchar
+  arca_certificado_ref varchar [note: 'referencia al certificado digital guardado fuera de la base']
+  arca_certificado_vence date
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table ambitos {
+  id int [pk, increment]
+  tipo tipo_ambito
+  nombre varchar
+  entidad_fiscal_id int
+  direccion varchar
+  telefono varchar
+  email varchar
+  horarios varchar
+  visible_web boolean [note: 'los locales que aparecen en "Sucursales" y se pueden elegir en un pedido']
+  activo boolean
+  created_at datetime
+  updated_at datetime
+  note: 'Reemplaza a la tabla sucursales: un local es un ámbito de tipo local.'
+}
+
+Table puntos_venta {
+  id int [pk, increment]
+  entidad_fiscal_id int
+  ambito_id int
+  numero int
+  descripcion varchar
+  activo boolean
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (entidad_fiscal_id, numero) [unique]
+  }
+}
+
+Table punto_venta_comprobantes {
+  id int [pk, increment]
+  punto_venta_id int
+  tipo tipo_comprobante
+  letra letra_comprobante
+  created_at datetime
+  updated_at datetime
+  note: 'Tipos de comprobante que puede emitir cada punto de venta según la condición fiscal de su entidad.'
+
+  indexes {
+    (punto_venta_id, tipo, letra) [unique]
+  }
+}
+
+Table usuarios {
+  id int [pk, increment]
+  nombre varchar
+  email varchar [unique]
+  password_hash varchar
+  es_admin_tecnico boolean [note: 'crea las cuentas de los dueños; no ve datos comerciales de ningún ámbito']
+  activo boolean
+  intentos_fallidos int
+  bloqueado_hasta datetime
+  reset_token_hash varchar
+  reset_token_vence datetime
+  ultimo_acceso datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table usuario_ambitos {
+  id int [pk, increment]
+  usuario_id int
+  ambito_id int
+  perfil perfil_usuario [note: 'dueno_fabrica solo en ámbitos tipo fabrica; dueno_local y empleado_local solo en tipo local']
+  activo boolean
+  creado_por_usuario_id int
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (usuario_id, ambito_id) [unique]
+  }
+}
+
+Table auditorias {
+  id int [pk, increment]
+  usuario_id int
+  perfil perfil_usuario [note: 'perfil con el que actuaba; null para el administrador técnico']
+  ambito_id int [note: 'ámbito activo en ese momento']
+  accion varchar
+  entidad varchar
+  entidad_id int
+  detalle text
+  fecha_hora datetime
+  email_intentado varchar [note: 'login fallido con un email que no corresponde a ningún usuario']
+  ip varchar
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo y precios
+// ---------------------------------------------------------------------------
+
+Table categorias {
+  id int [pk, increment]
+  nombre varchar
+  descripcion text
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table articulos {
+  id int [pk, increment]
+  tipo tipo_articulo
+  nombre varchar
+  descripcion text
+  categoria_id int [note: 'null para insumos']
+  marca varchar [note: 'opcional']
+  unidad_medida varchar
+  imagen varchar
+  alicuota_iva decimal
+  costo_actual decimal [note: 'se actualiza con cada compra o cierre de lote']
+  visible_web boolean
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table listas_precios {
+  id int [pk, increment]
+  ambito_id int [note: 'dueño de la lista: la fábrica (lista para locales) o un local']
+  nombre varchar
+  precios_con_iva boolean
+  es_predeterminada boolean [note: 'lista de venta al público del ámbito']
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table lista_precios_items {
+  id int [pk, increment]
+  lista_id int
+  articulo_id int
+  precio decimal
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (lista_id, articulo_id) [unique]
+  }
+}
+
+Table historial_precios {
+  id int [pk, increment]
+  lista_id int
+  articulo_id int
+  precio_anterior decimal
+  precio_nuevo decimal
+  usuario_id int
+  fecha_hora datetime
+  created_at datetime
+  updated_at datetime
+}
+
+Table promociones {
+  id int [pk, increment]
+  ambito_id int
+  nombre varchar
+  articulo_id int [note: 'null si aplica a una categoría']
+  categoria_id int [note: 'null si aplica a un artículo']
+  porcentaje_descuento decimal
+  fecha_inicio date
+  fecha_fin date
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Stock
+// ---------------------------------------------------------------------------
+
+Table ubicaciones_stock {
+  id int [pk, increment]
+  ambito_id int
+  nombre varchar
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table stock_articulos {
+  id int [pk, increment]
+  articulo_id int
+  ubicacion_stock_id int
+  stock_minimo decimal
+  stock_maximo decimal
+  cantidad_actual decimal [note: 'caché de la suma de movimientos_stock; no se edita a mano']
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (articulo_id, ubicacion_stock_id) [unique]
+  }
+}
+
+Table movimientos_stock {
+  id int [pk, increment]
+  articulo_id int
+  ubicacion_stock_id int
+  tipo tipo_movimiento_stock
+  cantidad decimal [note: 'positiva si entra, negativa si sale']
+  lote_id int [note: 'lote del producto terminado; en produccion_consumo, el lote que consumió el insumo']
+  usuario_id int
+  fecha_hora datetime
+  motivo varchar [note: 'obligatorio cuando tipo = ajuste']
+  venta_id int
+  pedido_id int
+  compra_id int
+  entrega_id int
+  conteo_id int
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table reservas_stock {
+  id int [pk, increment]
+  pedido_id int
+  detalle_pedido_id int
+  articulo_id int
+  ubicacion_stock_id int
+  cantidad decimal
+  estado estado_reserva
+  created_at datetime
+  cerrada_at datetime [note: 'cuando pasa a consumida o liberada']
+  updated_at datetime
+  note: 'Se crea al confirmar el pedido, se consume al entregarlo o cobrarlo y se libera si se rechaza, cancela o vence. Disponible = cantidad_actual − reservas activas.'
+}
+
+Table conteos_stock {
+  id int [pk, increment]
+  ubicacion_stock_id int
+  usuario_id int
+  fecha date
+  estado estado_conteo
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_conteo {
+  id int [pk, increment]
+  conteo_id int
+  articulo_id int
+  cantidad_sistema decimal
+  cantidad_contada decimal
+  created_at datetime
+  updated_at datetime
+  note: 'La diferencia se calcula y genera un movimiento tipo conteo al cerrar.'
+}
+
+// ---------------------------------------------------------------------------
+// Clientes y pedidos online
+// ---------------------------------------------------------------------------
+
+Table clientes {
+  id int [pk, increment]
+  nombre varchar
+  razon_social varchar
+  documento_tipo varchar [note: 'CUIT o DNI']
+  documento_numero varchar
+  condicion_iva condicion_iva
+  telefono varchar
+  email varchar
+  direccion varchar
+  password_hash varchar [note: 'solo clientes registrados desde la web']
+  lista_precios_id int
+  plazo_pago_dias int
+  ambito_representado_id int [note: 'cuando el cliente es un local que le compra a la fábrica']
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table pedidos {
+  id int [pk, increment]
+  cliente_id int
+  ambito_id int [note: 'local al que se asignó el pedido']
+  fecha datetime
+  modalidad modalidad_entrega
+  estado estado_pedido
+  estado_pago estado_pago_pedido [note: 'pasa a habilitado recién cuando el pedido se confirma']
+  medio_pago_elegido medio_pago
+  vence_at datetime [note: 'si llega sin pago, el pedido pasa a vencido y libera la reserva']
+  total decimal
+  observaciones text [note: 'observaciones cargadas por el cliente']
+  observaciones_internas text [note: 'notas internas del local, no visibles para el cliente']
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_pedidos {
+  id int [pk, increment]
+  pedido_id int
+  articulo_id int
+  cantidad decimal
+  precio_unitario decimal
+  subtotal decimal
+  created_at datetime
+  updated_at datetime
+}
+
+Table pedido_historial {
+  id int [pk, increment]
+  pedido_id int
+  usuario_id int [note: 'null si el cambio lo hizo el sistema (por ejemplo, vencimiento)']
+  estado_anterior estado_pedido
+  estado_nuevo estado_pedido
+  ambito_anterior_id int [note: 'solo en reasignaciones']
+  ambito_nuevo_id int
+  fecha_hora datetime
+  observacion text
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Ventas y comprobantes
+// ---------------------------------------------------------------------------
+
+Table ventas {
+  id int [pk, increment]
+  ambito_id int
+  usuario_id int
+  cliente_id int [note: 'opcional en ventas de mostrador']
+  pedido_id int [note: 'cuando la venta concreta un pedido online']
+  sesion_caja_id int
+  fecha_hora datetime
+  medio_pago medio_pago
+  subtotal decimal
+  descuento decimal
+  total decimal
+  estado estado_venta
+  comprobante_id int [note: 'opcional: null si la venta no tiene comprobante fiscal']
+  anulada_por_usuario_id int
+  anulada_at datetime
+  motivo_anulacion text
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_ventas {
+  id int [pk, increment]
+  venta_id int
+  articulo_id int
+  cantidad decimal
+  precio_unitario decimal
+  costo_unitario decimal [note: 'costo al momento de la venta, para calcular el margen']
+  subtotal decimal
+  created_at datetime
+  updated_at datetime
+}
+
+Table comprobantes {
+  id int [pk, increment]
+  tipo tipo_comprobante
+  letra letra_comprobante
+  punto_venta_id int [note: 'define la entidad emisora y el ámbito']
+  numero int
+  cliente_id int
+  receptor_razon_social varchar [note: 'datos del receptor copiados al emitir']
+  receptor_documento varchar
+  receptor_condicion_iva condicion_iva
+  usuario_id int
+  fecha datetime
+  fecha_vencimiento date
+  estado estado_comprobante
+  comprobante_asociado_id int [note: 'factura o remito que corrige una nota de crédito']
+  neto decimal
+  iva decimal
+  total decimal
+  arca_estado arca_estado [note: 'null en comprobantes no fiscales']
+  cae varchar
+  cae_vence date
+  observaciones text
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (punto_venta_id, tipo, letra, numero) [unique]
+  }
+}
+
+Table detalle_comprobante {
+  id int [pk, increment]
+  comprobante_id int
+  articulo_id int
+  descripcion varchar
+  cantidad decimal
+  precio_unitario decimal
+  alicuota_iva decimal
+  subtotal decimal
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Entregas entre ámbitos (venta de la fábrica a los locales)
+// ---------------------------------------------------------------------------
+
+Table entregas {
+  id int [pk, increment]
+  ambito_origen_id int
+  ambito_destino_id int
+  ubicacion_origen_id int
+  ubicacion_destino_id int
+  lista_precios_id int
+  estado estado_entrega
+  usuario_envio_id int
+  fecha_envio datetime
+  usuario_recepcion_id int
+  fecha_recepcion datetime
+  remito_id int [note: 'comprobante tipo remito, con precio, del ámbito origen']
+  factura_id int [note: 'según la condición fiscal; se asocia al remito y no suma deuda']
+  nota_credito_id int [note: 'cuando la fábrica resuelve una diferencia con nota de crédito']
+  diferencia_resuelta_at datetime
+  total decimal
+  observaciones text
+  observaciones_recepcion text [note: 'diferencias informadas por el destino']
+  created_at datetime
+  updated_at datetime
+  note: 'El stock sale del origen al enviar y entra al destino recién al confirmar la recepción, valuado al precio de la entrega.'
+}
+
+Table detalle_entregas {
+  id int [pk, increment]
+  entrega_id int
+  articulo_id int
+  lote_id int
+  cantidad_enviada decimal
+  cantidad_recibida decimal [note: 'la carga el destino al confirmar la recepción']
+  precio_unitario decimal
+  subtotal decimal
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Cuentas corrientes y cobranzas
+// ---------------------------------------------------------------------------
+
+Table movimientos_cuenta_corriente {
+  id int [pk, increment]
+  ambito_id int [note: 'ámbito acreedor (quien cobra)']
+  cliente_id int
+  tipo tipo_movimiento_cc
+  importe decimal [note: 'positivo aumenta la deuda del cliente, negativo la reduce']
+  fecha datetime
+  vence date
+  venta_id int
+  entrega_id int
+  cobranza_id int
+  comprobante_id int
+  usuario_id int
+  observaciones text
+  created_at datetime
+  updated_at datetime
+  note: 'Saldo del cliente = suma de importes. Incluye la cuenta corriente de cada local con la fábrica.'
+}
+
+Table cobranzas {
+  id int [pk, increment]
+  ambito_id int
+  cliente_id int
+  usuario_id int
+  sesion_caja_id int
+  fecha datetime
+  medio_pago medio_pago
+  monto decimal
+  recibo_id int [note: 'comprobante tipo recibo']
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_cobranza {
+  id int [pk, increment]
+  cobranza_id int
+  movimiento_cc_id int [note: 'deuda a la que se imputa el pago']
+  importe_aplicado decimal
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Caja
+// ---------------------------------------------------------------------------
+
+Table sesiones_caja {
+  id int [pk, increment]
+  ambito_id int
+  usuario_apertura_id int
+  usuario_cierre_id int
+  abierta_at datetime
+  cerrada_at datetime
+  saldo_inicial decimal
+  total_efectivo decimal
+  total_transferencia decimal
+  total_billetera decimal
+  total_general decimal
+  efectivo_esperado decimal
+  efectivo_contado decimal
+  diferencia decimal
+  estado estado_caja [note: 'una vez cerrada, solo un usuario autorizado la modifica y queda en auditoría']
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table movimientos_caja {
+  id int [pk, increment]
+  sesion_caja_id int
+  usuario_id int
+  tipo tipo_movimiento_caja
+  rubro varchar [note: 'gasto del local, retiro, aporte, etc.']
+  medio_pago medio_pago
+  monto decimal
+  fecha_hora datetime
+  observacion text
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Proveedores y compras
+// ---------------------------------------------------------------------------
+
+Table proveedores {
+  id int [pk, increment]
+  ambito_id int [note: 'ámbito que le compra']
+  razon_social varchar
+  cuit varchar
+  condicion_iva condicion_iva
+  contacto varchar
+  tipo_provee varchar
+  condiciones_comerciales text
+  descuento_porcentaje decimal
+  plazo_pago_dias int
+  ambito_representado_id int [note: 'cuando el proveedor es la fábrica (proveedor de cada local)']
+  observaciones text
+  activo boolean
+  created_at datetime
+  updated_at datetime
+}
+
+Table ordenes_compra {
+  id int [pk, increment]
+  ambito_id int
+  proveedor_id int
+  usuario_id int
+  fecha date
+  estado estado_orden_compra
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_orden_compra {
+  id int [pk, increment]
+  orden_id int
+  articulo_id int
+  cantidad decimal
+  costo_estimado decimal
+  created_at datetime
+  updated_at datetime
+}
+
+Table compras {
+  id int [pk, increment]
+  ambito_id int
+  proveedor_id int
+  usuario_id int
+  ubicacion_stock_id int
+  orden_compra_id int
+  entrega_id int [note: 'cuando la compra es la recepción de una entrega de la fábrica']
+  tipo tipo_compra
+  fecha date
+  comprobante_proveedor varchar
+  fecha_vencimiento date
+  total decimal
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_compra {
+  id int [pk, increment]
+  compra_id int
+  articulo_id int
+  cantidad decimal
+  costo_unitario decimal
+  subtotal decimal
+  created_at datetime
+  updated_at datetime
+}
+
+Table pagos_proveedor {
+  id int [pk, increment]
+  ambito_id int
+  proveedor_id int
+  usuario_id int
+  sesion_caja_id int
+  fecha datetime
+  medio_pago medio_pago
+  monto decimal
+  cobranza_id int [note: 'cuando el pago es de un local a la fábrica, la cobranza que registró la fábrica']
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table detalle_pago_proveedor {
+  id int [pk, increment]
+  pago_id int
+  compra_id int
+  importe_aplicado decimal
+  created_at datetime
+  updated_at datetime
+}
+
+// ---------------------------------------------------------------------------
+// Producción
+// ---------------------------------------------------------------------------
+
+Table recetas {
+  id int [pk, increment]
+  articulo_id int [note: 'producto terminado']
+  version int
+  cantidad_base decimal [note: 'cantidad de producto que rinde la receta']
+  vigente boolean
+  observaciones text
+  created_at datetime
+  updated_at datetime
+}
+
+Table receta_items {
+  id int [pk, increment]
+  receta_id int
+  articulo_id int [note: 'insumo']
+  cantidad decimal
+  created_at datetime
+  updated_at datetime
+}
+
+Table lotes_produccion {
+  id int [pk, increment]
+  numero_lote varchar [unique]
+  receta_id int
+  articulo_id int
+  ambito_id int
+  ubicacion_stock_id int
+  usuario_id int
+  estado estado_lote
+  fecha_inicio date
+  fecha_cierre date
+  cantidad_producida decimal
+  costo_total decimal [note: 'según el costo vigente de los insumos al cerrar']
+  costo_unitario decimal
+  observaciones text
+  created_at datetime
+  updated_at datetime
+  note: 'Al cerrar el lote se descuentan los insumos y se suma el producto terminado al stock de la fábrica.'
+}
+
+Table lote_insumos {
+  id int [pk, increment]
+  lote_id int
+  articulo_id int
+  cantidad_teorica decimal [note: 'según la receta y la cantidad producida']
+  cantidad_real decimal
+  costo_unitario decimal
+  created_at datetime
+  updated_at datetime
+  note: 'Merma = cantidad_real − cantidad_teorica.'
+}
+
+// ---------------------------------------------------------------------------
+// Relaciones
+// ---------------------------------------------------------------------------
+
+Ref: ambitos.entidad_fiscal_id > entidades_fiscales.id
+Ref: puntos_venta.entidad_fiscal_id > entidades_fiscales.id
+Ref: puntos_venta.ambito_id > ambitos.id
+Ref: punto_venta_comprobantes.punto_venta_id > puntos_venta.id
+Ref: usuario_ambitos.usuario_id > usuarios.id
+Ref: usuario_ambitos.ambito_id > ambitos.id
+Ref: usuario_ambitos.creado_por_usuario_id > usuarios.id
+Ref: auditorias.usuario_id > usuarios.id
+Ref: auditorias.ambito_id > ambitos.id
+
+Ref: articulos.categoria_id > categorias.id
+Ref: listas_precios.ambito_id > ambitos.id
+Ref: lista_precios_items.lista_id > listas_precios.id
+Ref: lista_precios_items.articulo_id > articulos.id
+Ref: historial_precios.lista_id > listas_precios.id
+Ref: historial_precios.articulo_id > articulos.id
+Ref: historial_precios.usuario_id > usuarios.id
+Ref: promociones.ambito_id > ambitos.id
+Ref: promociones.articulo_id > articulos.id
+Ref: promociones.categoria_id > categorias.id
+
+Ref: ubicaciones_stock.ambito_id > ambitos.id
+Ref: stock_articulos.articulo_id > articulos.id
+Ref: stock_articulos.ubicacion_stock_id > ubicaciones_stock.id
+Ref: movimientos_stock.articulo_id > articulos.id
+Ref: movimientos_stock.ubicacion_stock_id > ubicaciones_stock.id
+Ref: movimientos_stock.lote_id > lotes_produccion.id
+Ref: movimientos_stock.usuario_id > usuarios.id
+Ref: movimientos_stock.venta_id > ventas.id
+Ref: movimientos_stock.pedido_id > pedidos.id
+Ref: movimientos_stock.compra_id > compras.id
+Ref: movimientos_stock.entrega_id > entregas.id
+Ref: movimientos_stock.conteo_id > conteos_stock.id
+Ref: reservas_stock.pedido_id > pedidos.id
+Ref: reservas_stock.detalle_pedido_id > detalle_pedidos.id
+Ref: reservas_stock.articulo_id > articulos.id
+Ref: reservas_stock.ubicacion_stock_id > ubicaciones_stock.id
+Ref: conteos_stock.ubicacion_stock_id > ubicaciones_stock.id
+Ref: conteos_stock.usuario_id > usuarios.id
+Ref: detalle_conteo.conteo_id > conteos_stock.id
+Ref: detalle_conteo.articulo_id > articulos.id
+
+Ref: clientes.lista_precios_id > listas_precios.id
+Ref: clientes.ambito_representado_id > ambitos.id
+Ref: pedidos.cliente_id > clientes.id
+Ref: pedidos.ambito_id > ambitos.id
+Ref: detalle_pedidos.pedido_id > pedidos.id
+Ref: detalle_pedidos.articulo_id > articulos.id
+Ref: pedido_historial.pedido_id > pedidos.id
+Ref: pedido_historial.usuario_id > usuarios.id
+Ref: pedido_historial.ambito_anterior_id > ambitos.id
+Ref: pedido_historial.ambito_nuevo_id > ambitos.id
+
+Ref: ventas.ambito_id > ambitos.id
+Ref: ventas.usuario_id > usuarios.id
+Ref: ventas.cliente_id > clientes.id
+Ref: ventas.pedido_id > pedidos.id
+Ref: ventas.sesion_caja_id > sesiones_caja.id
+Ref: ventas.comprobante_id > comprobantes.id
+Ref: ventas.anulada_por_usuario_id > usuarios.id
+Ref: detalle_ventas.venta_id > ventas.id
+Ref: detalle_ventas.articulo_id > articulos.id
+Ref: comprobantes.punto_venta_id > puntos_venta.id
+Ref: comprobantes.cliente_id > clientes.id
+Ref: comprobantes.usuario_id > usuarios.id
+Ref: comprobantes.comprobante_asociado_id > comprobantes.id
+Ref: detalle_comprobante.comprobante_id > comprobantes.id
+Ref: detalle_comprobante.articulo_id > articulos.id
+
+Ref: entregas.ambito_origen_id > ambitos.id
+Ref: entregas.ambito_destino_id > ambitos.id
+Ref: entregas.ubicacion_origen_id > ubicaciones_stock.id
+Ref: entregas.ubicacion_destino_id > ubicaciones_stock.id
+Ref: entregas.lista_precios_id > listas_precios.id
+Ref: entregas.usuario_envio_id > usuarios.id
+Ref: entregas.usuario_recepcion_id > usuarios.id
+Ref: entregas.remito_id > comprobantes.id
+Ref: entregas.factura_id > comprobantes.id
+Ref: entregas.nota_credito_id > comprobantes.id
+Ref: detalle_entregas.entrega_id > entregas.id
+Ref: detalle_entregas.articulo_id > articulos.id
+Ref: detalle_entregas.lote_id > lotes_produccion.id
+
+Ref: movimientos_cuenta_corriente.ambito_id > ambitos.id
+Ref: movimientos_cuenta_corriente.cliente_id > clientes.id
+Ref: movimientos_cuenta_corriente.venta_id > ventas.id
+Ref: movimientos_cuenta_corriente.entrega_id > entregas.id
+Ref: movimientos_cuenta_corriente.cobranza_id > cobranzas.id
+Ref: movimientos_cuenta_corriente.comprobante_id > comprobantes.id
+Ref: movimientos_cuenta_corriente.usuario_id > usuarios.id
+Ref: cobranzas.ambito_id > ambitos.id
+Ref: cobranzas.cliente_id > clientes.id
+Ref: cobranzas.usuario_id > usuarios.id
+Ref: cobranzas.sesion_caja_id > sesiones_caja.id
+Ref: cobranzas.recibo_id > comprobantes.id
+Ref: detalle_cobranza.cobranza_id > cobranzas.id
+Ref: detalle_cobranza.movimiento_cc_id > movimientos_cuenta_corriente.id
+
+Ref: sesiones_caja.ambito_id > ambitos.id
+Ref: sesiones_caja.usuario_apertura_id > usuarios.id
+Ref: sesiones_caja.usuario_cierre_id > usuarios.id
+Ref: movimientos_caja.sesion_caja_id > sesiones_caja.id
+Ref: movimientos_caja.usuario_id > usuarios.id
+
+Ref: proveedores.ambito_id > ambitos.id
+Ref: proveedores.ambito_representado_id > ambitos.id
+Ref: ordenes_compra.ambito_id > ambitos.id
+Ref: ordenes_compra.proveedor_id > proveedores.id
+Ref: ordenes_compra.usuario_id > usuarios.id
+Ref: detalle_orden_compra.orden_id > ordenes_compra.id
+Ref: detalle_orden_compra.articulo_id > articulos.id
+Ref: compras.ambito_id > ambitos.id
+Ref: compras.proveedor_id > proveedores.id
+Ref: compras.usuario_id > usuarios.id
+Ref: compras.ubicacion_stock_id > ubicaciones_stock.id
+Ref: compras.orden_compra_id > ordenes_compra.id
+Ref: compras.entrega_id > entregas.id
+Ref: detalle_compra.compra_id > compras.id
+Ref: detalle_compra.articulo_id > articulos.id
+Ref: pagos_proveedor.ambito_id > ambitos.id
+Ref: pagos_proveedor.proveedor_id > proveedores.id
+Ref: pagos_proveedor.usuario_id > usuarios.id
+Ref: pagos_proveedor.sesion_caja_id > sesiones_caja.id
+Ref: pagos_proveedor.cobranza_id > cobranzas.id
+Ref: detalle_pago_proveedor.pago_id > pagos_proveedor.id
+Ref: detalle_pago_proveedor.compra_id > compras.id
+
+Ref: recetas.articulo_id > articulos.id
+Ref: receta_items.receta_id > recetas.id
+Ref: receta_items.articulo_id > articulos.id
+Ref: lotes_produccion.receta_id > recetas.id
+Ref: lotes_produccion.articulo_id > articulos.id
+Ref: lotes_produccion.ambito_id > ambitos.id
+Ref: lotes_produccion.ubicacion_stock_id > ubicaciones_stock.id
+Ref: lotes_produccion.usuario_id > usuarios.id
+Ref: lote_insumos.lote_id > lotes_produccion.id
+Ref: lote_insumos.articulo_id > articulos.id

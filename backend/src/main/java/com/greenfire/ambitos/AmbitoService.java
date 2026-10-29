@@ -1,0 +1,148 @@
+package com.greenfire.ambitos;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.greenfire.ambitos.dto.AmbitoEdicionAdminRequest;
+import com.greenfire.ambitos.dto.AmbitoRequest;
+import com.greenfire.ambitos.dto.AmbitoResponse;
+import com.greenfire.ambitos.dto.ContactoLocalRequest;
+import com.greenfire.ambitos.dto.LocalPublicoResponse;
+import com.greenfire.auditoria.Auditor;
+import com.greenfire.comun.Cambios;
+import com.greenfire.comun.NoEncontradoException;
+import com.greenfire.comun.ReglaNegocioException;
+import com.greenfire.fiscal.EntidadFiscal;
+import com.greenfire.fiscal.EntidadFiscalRepository;
+import com.greenfire.seguridad.Acceso;
+import com.greenfire.seguridad.Perfil;
+import com.greenfire.seguridad.Sesion;
+
+@Service
+@Transactional
+public class AmbitoService {
+
+    private static final String ENTIDAD = "ambito";
+
+    private final AmbitoRepository ambitos;
+    private final EntidadFiscalRepository entidades;
+    private final Acceso acceso;
+    private final Auditor auditor;
+
+    public AmbitoService(AmbitoRepository ambitos, EntidadFiscalRepository entidades, Acceso acceso, Auditor auditor) {
+        this.ambitos = ambitos;
+        this.entidades = entidades;
+        this.acceso = acceso;
+        this.auditor = auditor;
+    }
+
+    // --- Administrador técnico ---
+
+    @Transactional(readOnly = true)
+    public List<AmbitoResponse> listar() {
+        acceso.exigirAdminTecnico();
+        return ambitos.findAllByOrderByTipoAscNombreAsc().stream().map(AmbitoResponse::de).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AmbitoResponse obtener(Long id) {
+        acceso.exigirAdminTecnico();
+        return AmbitoResponse.de(buscar(id));
+    }
+
+    public AmbitoResponse crear(AmbitoRequest req) {
+        acceso.exigirAdminTecnico();
+        if (req.tipo() == TipoAmbito.fabrica && ambitos.existsByTipo(TipoAmbito.fabrica)) {
+            throw new ReglaNegocioException("Ya existe la fábrica: solo puede haber una.");
+        }
+        validarVisibleWeb(req.tipo(), req.visibleWeb());
+        EntidadFiscal entidad = entidades.findById(req.entidadFiscalId())
+                .orElseThrow(() -> new NoEncontradoException("No existe la entidad fiscal indicada."));
+
+        Ambito ambito = new Ambito();
+        ambito.setTipo(req.tipo());
+        ambito.setNombre(req.nombre());
+        ambito.setEntidadFiscal(entidad);
+        ambito.setDireccion(req.direccion());
+        ambito.setTelefono(req.telefono());
+        ambito.setEmail(req.email());
+        ambito.setHorarios(req.horarios());
+        ambito.setVisibleWeb(req.visibleWeb());
+        ambitos.save(ambito);
+
+        Map<String, Object> detalle = new LinkedHashMap<>();
+        detalle.put("tipo", ambito.getTipo());
+        detalle.put("nombre", ambito.getNombre());
+        detalle.put("entidadFiscalId", entidad.getId());
+        detalle.put("visibleWeb", ambito.isVisibleWeb());
+        auditor.registrar("crear", ENTIDAD, ambito.getId(), detalle);
+        return AmbitoResponse.de(ambito);
+    }
+
+    public AmbitoResponse editar(Long id, AmbitoEdicionAdminRequest req) {
+        acceso.exigirAdminTecnico();
+        Ambito a = buscar(id);
+        validarVisibleWeb(a.getTipo(), req.visibleWeb());
+        Cambios c = new Cambios();
+        a.setNombre(c.registrar("nombre", a.getNombre(), req.nombre()));
+        a.setDireccion(c.registrar("direccion", a.getDireccion(), req.direccion()));
+        a.setTelefono(c.registrar("telefono", a.getTelefono(), req.telefono()));
+        a.setEmail(c.registrar("email", a.getEmail(), req.email()));
+        a.setHorarios(c.registrar("horarios", a.getHorarios(), req.horarios()));
+        a.setVisibleWeb(c.registrar("visibleWeb", a.isVisibleWeb(), req.visibleWeb()));
+        auditor.registrarCambios("editar", ENTIDAD, id, c);
+        return AmbitoResponse.de(a);
+    }
+
+    public AmbitoResponse cambiarActivo(Long id, boolean activo) {
+        acceso.exigirAdminTecnico();
+        Ambito a = buscar(id);
+        Cambios c = new Cambios();
+        a.setActivo(c.registrar("activo", a.isActivo(), activo));
+        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, c);
+        return AmbitoResponse.de(a);
+    }
+
+    // --- Usuarios de un ámbito ---
+
+    @Transactional(readOnly = true)
+    public AmbitoResponse actual() {
+        Sesion sesion = acceso.exigirAmbito();
+        return AmbitoResponse.de(buscar(sesion.ambitoId()));
+    }
+
+    /** El dueño de local edita los datos de contacto del local en el que está trabajando. */
+    public AmbitoResponse editarContacto(ContactoLocalRequest req) {
+        Sesion sesion = acceso.exigirPerfil(Perfil.dueno_local);
+        Ambito a = buscar(sesion.ambitoId());
+        Cambios c = new Cambios();
+        a.setDireccion(c.registrar("direccion", a.getDireccion(), req.direccion()));
+        a.setHorarios(c.registrar("horarios", a.getHorarios(), req.horarios()));
+        a.setTelefono(c.registrar("telefono", a.getTelefono(), req.telefono()));
+        a.setEmail(c.registrar("email", a.getEmail(), req.email()));
+        auditor.registrarCambios("editar_contacto", ENTIDAD, a.getId(), c);
+        return AmbitoResponse.de(a);
+    }
+
+    // --- Sitio público ---
+
+    @Transactional(readOnly = true)
+    public List<LocalPublicoResponse> localesPublicos() {
+        return ambitos.findByTipoAndVisibleWebTrueAndActivoTrueOrderByNombre(TipoAmbito.local).stream()
+                .map(LocalPublicoResponse::de).toList();
+    }
+
+    private void validarVisibleWeb(TipoAmbito tipo, boolean visibleWeb) {
+        if (visibleWeb && tipo == TipoAmbito.fabrica) {
+            throw new ReglaNegocioException("La fábrica no se muestra en la web: solo los locales.");
+        }
+    }
+
+    private Ambito buscar(Long id) {
+        return ambitos.findById(id).orElseThrow(() -> new NoEncontradoException("No existe el ámbito indicado."));
+    }
+}
