@@ -279,6 +279,7 @@ Table auditorias {
   ip varchar
   created_at datetime
   updated_at datetime
+  note: 'Solo inserción: la base rechaza UPDATE, DELETE y TRUNCATE. El detalle nunca guarda contraseñas, hashes, tokens ni datos del certificado de ARCA.'
 }
 
 // ---------------------------------------------------------------------------

@@ -35,6 +35,8 @@ server:
         secure: ${COOKIE_SECURE:false}
 
 greenfire:
+  # Zona horaria de la empresa, para interpretar fechas sin hora (por ejemplo, los filtros por día).
+  zona-horaria: America/Argentina/Buenos_Aires
   seguridad:
     intentos-maximos: 5
     bloqueo: 15m

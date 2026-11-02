@@ -28,6 +28,9 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 - Todas las tablas del modelo llevan `created_at` y `updated_at` (`timestamptz`, con default `now()`). Las entidades JPA extienden `comun.EntidadBase`.
 - Los enums del modelo van como `varchar` con `CHECK`, nunca como tipos enum de PostgreSQL. En Java, las constantes del enum se escriben igual que el valor de la base (`dueno_local`, `responsable_inscripto`), así se mapean con `@Enumerated(STRING)` y la API usa los mismos valores.
 - Toda operación auditable se registra con `auditoria.Auditor`. Las ediciones usan `comun.Cambios`, que guarda solo los campos que cambiaron, con su valor anterior y el nuevo.
+- La auditoría se guarda en la misma transacción que la operación (`auditoria.RegistroAuditoria`, propagación MANDATORY). Si el insert falla, se revierte todo y la API responde 500. Auditar fuera de una transacción es un error.
+- `auditoria.Redactor` reemplaza por `[oculto]` todo campo del detalle cuyo nombre contenga password, contrasena, hash, token, certificado o secret. Al nombrar campos nuevos con datos sensibles, usar esas palabras.
+- La tabla `auditorias` es solo de inserción: la base rechaza UPDATE, DELETE y TRUNCATE (migración V2), y `AuditoriaRepository` solo tiene `save`.
 - Lo que se pueda garantizar en la base (unicidad, pertenencia a la misma entidad fiscal, una sola fábrica) va como restricción, no solo en el servicio.
 
 ### Seguridad
