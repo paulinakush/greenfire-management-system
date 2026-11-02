@@ -79,7 +79,7 @@ public class AmbitoService {
         detalle.put("nombre", ambito.getNombre());
         detalle.put("entidadFiscalId", entidad.getId());
         detalle.put("visibleWeb", ambito.isVisibleWeb());
-        auditor.registrar("crear", ENTIDAD, ambito.getId(), detalle);
+        auditor.registrar("crear", ENTIDAD, ambito.getId(), List.of(ambito.getId()), detalle);
         return AmbitoResponse.de(ambito);
     }
 
@@ -94,7 +94,7 @@ public class AmbitoService {
         a.setEmail(c.registrar("email", a.getEmail(), req.email()));
         a.setHorarios(c.registrar("horarios", a.getHorarios(), req.horarios()));
         a.setVisibleWeb(c.registrar("visibleWeb", a.isVisibleWeb(), req.visibleWeb()));
-        auditor.registrarCambios("editar", ENTIDAD, id, c);
+        auditor.registrarCambios("editar", ENTIDAD, id, List.of(id), c);
         return AmbitoResponse.de(a);
     }
 
@@ -103,7 +103,7 @@ public class AmbitoService {
         Ambito a = buscar(id);
         Cambios c = new Cambios();
         a.setActivo(c.registrar("activo", a.isActivo(), activo));
-        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, c);
+        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, List.of(id), c);
         return AmbitoResponse.de(a);
     }
 
@@ -124,7 +124,7 @@ public class AmbitoService {
         a.setHorarios(c.registrar("horarios", a.getHorarios(), req.horarios()));
         a.setTelefono(c.registrar("telefono", a.getTelefono(), req.telefono()));
         a.setEmail(c.registrar("email", a.getEmail(), req.email()));
-        auditor.registrarCambios("editar_contacto", ENTIDAD, a.getId(), c);
+        auditor.registrarCambios("editar_contacto", ENTIDAD, a.getId(), List.of(a.getId()), c);
         return AmbitoResponse.de(a);
     }
 

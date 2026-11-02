@@ -106,7 +106,7 @@ public class EntidadFiscalService {
         e.setArcaCertificadoRef(c.registrar("arcaCertificadoRef", e.getArcaCertificadoRef(), req.arcaCertificadoRef()));
         e.setArcaCertificadoVence(
                 c.registrar("arcaCertificadoVence", e.getArcaCertificadoVence(), req.arcaCertificadoVence()));
-        auditor.registrarCambios("editar", ENTIDAD, id, c);
+        auditor.registrarCambios("editar", ENTIDAD, id, ambitos.idsDeEntidadFiscal(id), c);
         return EntidadFiscalResponse.de(e);
     }
 
@@ -115,7 +115,7 @@ public class EntidadFiscalService {
         EntidadFiscal e = buscar(id);
         Cambios c = new Cambios();
         e.setActivo(c.registrar("activo", e.isActivo(), activo));
-        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, c);
+        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, ambitos.idsDeEntidadFiscal(id), c);
         return EntidadFiscalResponse.de(e);
     }
 

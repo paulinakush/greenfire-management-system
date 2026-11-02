@@ -52,11 +52,28 @@ class AuditoriaRegistroTest {
         assertThat(fila.get("usuario_id")).isEqualTo(lucia.getId());
         assertThat(fila.get("perfil")).isEqualTo("dueno_local");
         assertThat(fila.get("ambito_id")).isEqualTo(centro.getId());
+        assertThat(fila.get("ambito_afectado_id")).isEqualTo(centro.getId());
         assertThat(fila.get("entidad")).isEqualTo("ambito");
         assertThat(fila.get("entidad_id")).isEqualTo(centro.getId());
         assertThat(fila.get("ip")).isEqualTo("127.0.0.1");
         assertThat(fila.get("fecha_hora")).isNotNull();
         assertThat(fila.get("detalle")).isEqualTo("{\"horarios\":{\"antes\":null,\"despues\":\"Lun a Vie 9 a 18\"}}");
+    }
+
+    @Test
+    void unaAccionQueTocaVariosAmbitosDejaUnRegistroPorCadaUno() throws Exception {
+        Ambito fabrica = datos.fabrica();
+        Ambito central = datos.local("Central");
+        Usuario socio = datos.usuario("Socio");
+        datos.perfil(socio, fabrica, Perfil.dueno_fabrica);
+        datos.perfil(socio, central, Perfil.dueno_local);
+
+        mvc.perform(post("/api/admin/usuarios/" + socio.getId() + "/desactivar").with(datos.admin()))
+                .andExpect(status().isOk());
+
+        assertThat(jdbc.queryForList(
+                "select ambito_afectado_id from auditorias where accion = 'desactivar' and entidad_id = ?",
+                Long.class, socio.getId())).containsExactlyInAnyOrder(fabrica.getId(), central.getId());
     }
 
     @Test

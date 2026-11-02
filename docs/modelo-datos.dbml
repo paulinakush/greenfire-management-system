@@ -269,7 +269,8 @@ Table auditorias {
   id int [pk, increment]
   usuario_id int
   perfil perfil_usuario [note: 'perfil con el que actuaba; null para el administrador técnico']
-  ambito_id int [note: 'ámbito activo en ese momento']
+  ambito_id int [note: 'ámbito activo de quien actúa']
+  ambito_afectado_id int [note: 'ámbito que toca la acción (alta, edición o desactivación); si toca varios, un registro por ámbito']
   accion varchar
   entidad varchar
   entidad_id int
@@ -884,6 +885,7 @@ Ref: usuario_ambitos.ambito_id > ambitos.id
 Ref: usuario_ambitos.creado_por_usuario_id > usuarios.id
 Ref: auditorias.usuario_id > usuarios.id
 Ref: auditorias.ambito_id > ambitos.id
+Ref: auditorias.ambito_afectado_id > ambitos.id
 
 Ref: articulos.categoria_id > categorias.id
 Ref: listas_precios.ambito_id > ambitos.id

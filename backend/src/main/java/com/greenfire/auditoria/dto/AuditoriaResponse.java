@@ -14,6 +14,8 @@ public record AuditoriaResponse(
         Perfil perfil,
         Long ambitoId,
         String ambitoNombre,
+        Long ambitoAfectadoId,
+        String ambitoAfectadoNombre,
         String accion,
         String entidad,
         Long entidadId,
@@ -28,6 +30,8 @@ public record AuditoriaResponse(
                 a.getPerfil(),
                 a.getAmbito() == null ? null : a.getAmbito().getId(),
                 a.getAmbito() == null ? null : a.getAmbito().getNombre(),
+                a.getAmbitoAfectado() == null ? null : a.getAmbitoAfectado().getId(),
+                a.getAmbitoAfectado() == null ? null : a.getAmbitoAfectado().getNombre(),
                 a.getAccion(), a.getEntidad(), a.getEntidadId(), a.getDetalle(), a.getEmailIntentado(), a.getIp());
     }
 }

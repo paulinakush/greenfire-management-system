@@ -25,8 +25,8 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 
 /**
- * Consulta de auditoría. El administrador técnico ve todo, incluidos los logins fallidos; cada dueño ve solo
- * lo ocurrido en su ámbito activo; el empleado no ve nada.
+ * Consulta de auditoría. El administrador técnico ve todo, incluidos los logins fallidos. Cada dueño ve lo que
+ * se hizo en su ámbito activo o sobre él, sin los eventos de login y sesión. El empleado no ve nada.
  */
 @Service
 @Transactional(readOnly = true)
@@ -56,6 +56,7 @@ public class AuditoriaService {
         Root<Auditoria> a = consulta.from(Auditoria.class);
         a.fetch("usuario", JoinType.LEFT);
         a.fetch("ambito", JoinType.LEFT);
+        a.fetch("ambitoAfectado", JoinType.LEFT);
         consulta.where(filtros(cb, a, ambitoId, desde, hasta, usuarioId, accion))
                 .orderBy(cb.desc(a.get("fechaHora")), cb.desc(a.get("id")));
         List<AuditoriaResponse> registros = em.createQuery(consulta)
@@ -84,7 +85,9 @@ public class AuditoriaService {
             LocalDate hasta, Long usuarioId, String accion) {
         List<Predicate> p = new ArrayList<>();
         if (ambitoId != null) {
-            p.add(cb.equal(a.get("ambito").get("id"), ambitoId));
+            p.add(cb.or(cb.equal(a.get("ambito").get("id"), ambitoId),
+                    cb.equal(a.get("ambitoAfectado").get("id"), ambitoId)));
+            p.add(cb.not(a.get("accion").in(Auditor.ACCIONES_DE_ACCESO)));
         }
         if (desde != null) {
             p.add(cb.greaterThanOrEqualTo(a.get("fechaHora"), inicioDelDia(desde)));

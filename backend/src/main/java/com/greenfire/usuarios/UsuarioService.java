@@ -97,7 +97,7 @@ public class UsuarioService {
         Map<String, Object> detalle = new LinkedHashMap<>();
         detalle.put("ambitoId", ambito.getId());
         detalle.put("perfil", req.perfil());
-        auditor.registrar("agregar_perfil", ENTIDAD, usuarioId, detalle);
+        auditor.registrar("agregar_perfil", ENTIDAD, usuarioId, List.of(ambito.getId()), detalle);
         return UsuarioResponse.de(u, perfiles.deUsuario(usuarioId));
     }
 
@@ -125,7 +125,7 @@ public class UsuarioService {
         if (!activo) {
             sesionHttp.cerrarTodas(id);
         }
-        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, c);
+        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, ambitosDe(id), c);
         return UsuarioResponse.de(u, perfiles.deUsuario(id));
     }
 
@@ -139,7 +139,7 @@ public class UsuarioService {
         u.setResetTokenHash(null);
         u.setResetTokenVence(null);
         sesionHttp.cerrarTodas(id);
-        auditor.registrar("restablecer_password", ENTIDAD, id, Map.of());
+        auditor.registrar("restablecer_password", ENTIDAD, id, ambitosDe(id), Map.of());
     }
 
     // --- Dueño de local ---
@@ -235,7 +235,7 @@ public class UsuarioService {
         Cambios c = new Cambios();
         u.setNombre(c.registrar("nombre", u.getNombre(), req.nombre().trim()));
         u.setEmail(c.registrar("email", u.getEmail(), req.email().trim()));
-        auditor.registrarCambios("editar", ENTIDAD, u.getId(), c);
+        auditor.registrarCambios("editar", ENTIDAD, u.getId(), ambitosDe(u.getId()), c);
     }
 
     private void cambiarActivo(UsuarioAmbito ua, boolean activo) {
@@ -246,7 +246,7 @@ public class UsuarioService {
         detalle.put("perfil", ua.getPerfil());
         if (!c.vacio()) {
             auditor.registrar(activo ? "activar_perfil" : "desactivar_perfil", ENTIDAD, ua.getUsuario().getId(),
-                    detalle);
+                    List.of(ua.getAmbito().getId()), detalle);
         }
     }
 
@@ -256,7 +256,12 @@ public class UsuarioService {
         detalle.put("email", u.getEmail());
         detalle.put("ambitoId", ua.getAmbito().getId());
         detalle.put("perfil", ua.getPerfil());
-        auditor.registrar("crear", ENTIDAD, u.getId(), detalle);
+        auditor.registrar("crear", ENTIDAD, u.getId(), List.of(ua.getAmbito().getId()), detalle);
+    }
+
+    /** Un cambio en la cuenta toca a todos los ámbitos en los que el usuario tiene perfil. */
+    private List<Long> ambitosDe(Long usuarioId) {
+        return perfiles.deUsuario(usuarioId).stream().map(ua -> ua.getAmbito().getId()).toList();
     }
 
     /** Los administradores técnicos no se gestionan desde la API. */

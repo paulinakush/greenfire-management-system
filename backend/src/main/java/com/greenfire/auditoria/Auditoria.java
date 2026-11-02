@@ -31,6 +31,8 @@ public class Auditoria extends EntidadBase {
     private Perfil perfil;
     @ManyToOne(fetch = FetchType.LAZY)
     private Ambito ambito;
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Ambito ambitoAfectado;
     private String accion;
     private String entidad;
     private Long entidadId;
@@ -43,11 +45,12 @@ public class Auditoria extends EntidadBase {
     protected Auditoria() {
     }
 
-    Auditoria(Usuario usuario, Perfil perfil, Ambito ambito, String accion, String entidad, Long entidadId,
+    Auditoria(Usuario usuario, Perfil perfil, Ambito ambito, Ambito ambitoAfectado, String accion, String entidad, Long entidadId,
             String detalle, String emailIntentado, String ip, OffsetDateTime fechaHora) {
         this.usuario = usuario;
         this.perfil = perfil;
         this.ambito = ambito;
+        this.ambitoAfectado = ambitoAfectado;
         this.accion = accion;
         this.entidad = entidad;
         this.entidadId = entidadId;
@@ -67,6 +70,10 @@ public class Auditoria extends EntidadBase {
 
     public Ambito getAmbito() {
         return ambito;
+    }
+
+    public Ambito getAmbitoAfectado() {
+        return ambitoAfectado;
     }
 
     public String getAccion() {

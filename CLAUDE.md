@@ -31,6 +31,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 - La auditoría se guarda en la misma transacción que la operación (`auditoria.RegistroAuditoria`, propagación MANDATORY). Si el insert falla, se revierte todo y la API responde 500. Auditar fuera de una transacción es un error.
 - `auditoria.Redactor` reemplaza por `[oculto]` todo campo del detalle cuyo nombre contenga password, contrasena, hash, token, certificado o secret. Al nombrar campos nuevos con datos sensibles, usar esas palabras.
 - La tabla `auditorias` es solo de inserción: la base rechaza UPDATE, DELETE y TRUNCATE (migración V2), y `AuditoriaRepository` solo tiene `save`.
+- Cada registro guarda el ámbito activo de quien actúa (`ambito_id`) y el ámbito que toca la acción (`ambito_afectado_id`, V3). Toda alta, edición o desactivación que toque a un ámbito lo pasa a `Auditor` como afectado; si toca varios (por ejemplo, la cuenta de un usuario con perfil en dos ámbitos), queda un registro por cada uno.
 - Lo que se pueda garantizar en la base (unicidad, pertenencia a la misma entidad fiscal, una sola fábrica) va como restricción, no solo en el servicio.
 
 ### Seguridad
@@ -88,7 +89,7 @@ cd backend && ./mvnw test
 - El dueño de local edita de su local la dirección, los horarios, el teléfono y el email. El administrador técnico es el único que cambia el nombre del local y decide si se muestra en la web.
 - Cada edición queda en auditoría con el valor anterior y el nuevo.
 - La sesión vive en el servidor (no JWT). Bloqueo tras 5 intentos fallidos durante 15 minutos, sesión de 30 minutos sin actividad y contraseña de al menos 10 caracteres.
-- Auditoría: cada dueño ve la de su ámbito, el administrador técnico ve todo y el empleado no ve nada.
+- Auditoría: cada dueño ve los registros cuyo ámbito actuante o afectado es el suyo, sin los eventos de login y sesión (`Auditor.ACCIONES_DE_ACCESO`). El administrador técnico ve todo y el empleado no ve nada.
 
 ## Forma de trabajo
 

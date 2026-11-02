@@ -77,7 +77,7 @@ public class PuntoVentaService {
         detalle.put("entidadFiscalId", entidad.getId());
         detalle.put("numero", p.getNumero());
         detalle.put("comprobantes", describir(p.getComprobantes()));
-        auditor.registrar("crear", ENTIDAD, p.getId(), detalle);
+        auditor.registrar("crear", ENTIDAD, p.getId(), List.of(ambito.getId()), detalle);
         return PuntoVentaResponse.de(p);
     }
 
@@ -94,7 +94,7 @@ public class PuntoVentaService {
         p.setDescripcion(c.registrar("descripcion", p.getDescripcion(), req.descripcion()));
         c.registrar("comprobantes", describir(p.getComprobantes()), describir(req.comprobantes()));
         p.setComprobantes(req.comprobantes());
-        auditor.registrarCambios("editar", ENTIDAD, id, c);
+        auditor.registrarCambios("editar", ENTIDAD, id, List.of(p.getAmbito().getId()), c);
         return PuntoVentaResponse.de(p);
     }
 
@@ -103,7 +103,8 @@ public class PuntoVentaService {
         PuntoVenta p = buscar(id);
         Cambios c = new Cambios();
         p.setActivo(c.registrar("activo", p.isActivo(), activo));
-        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, c);
+        auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, List.of(p.getAmbito().getId()),
+                c);
         return PuntoVentaResponse.de(p);
     }
 
