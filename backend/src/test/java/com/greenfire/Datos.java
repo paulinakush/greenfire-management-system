@@ -4,6 +4,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +22,14 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import com.greenfire.ambitos.Ambito;
 import com.greenfire.ambitos.AmbitoRepository;
 import com.greenfire.ambitos.TipoAmbito;
+import com.greenfire.catalogo.Articulo;
+import com.greenfire.catalogo.ArticuloRepository;
+import com.greenfire.catalogo.Categoria;
+import com.greenfire.catalogo.CategoriaRepository;
+import com.greenfire.catalogo.CostoArticulo;
+import com.greenfire.catalogo.CostoArticuloRepository;
+import com.greenfire.catalogo.TipoArticulo;
+import com.greenfire.catalogo.UnidadMedida;
 import com.greenfire.fiscal.CondicionIva;
 import com.greenfire.fiscal.EntidadFiscal;
 import com.greenfire.fiscal.EntidadFiscalRepository;
@@ -48,14 +57,21 @@ public class Datos {
     private final UsuarioRepository usuarios;
     private final UsuarioAmbitoRepository perfiles;
     private final FindByIndexNameSessionRepository<? extends Session> sesiones;
+    private final CategoriaRepository categorias;
+    private final ArticuloRepository articulos;
+    private final CostoArticuloRepository costos;
 
     public Datos(EntidadFiscalRepository entidades, AmbitoRepository ambitos, UsuarioRepository usuarios,
-            UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones) {
+            UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones,
+            CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos) {
         this.entidades = entidades;
         this.ambitos = ambitos;
         this.usuarios = usuarios;
         this.perfiles = perfiles;
         this.sesiones = sesiones;
+        this.categorias = categorias;
+        this.articulos = articulos;
+        this.costos = costos;
     }
 
     // --- Entidades fiscales y ámbitos ---
@@ -101,6 +117,32 @@ public class Datos {
 
     public Ambito fabrica() {
         return ambito(TipoAmbito.fabrica, "Fábrica", CondicionIva.responsable_inscripto);
+    }
+
+    // --- Catálogo ---
+
+    public Categoria categoria(String nombre) {
+        Categoria c = new Categoria();
+        c.setNombre(nombre + " " + SECUENCIA.incrementAndGet());
+        return categorias.save(c);
+    }
+
+    /** Artículo activo del ámbito; los insumos van sin categoría. */
+    public Articulo articulo(Ambito ambito, TipoArticulo tipo, String nombre, Categoria categoria) {
+        Articulo a = new Articulo();
+        a.setAmbito(ambito);
+        a.setTipo(tipo);
+        a.setNombre(nombre);
+        a.setCategoria(tipo == TipoArticulo.insumo ? null : categoria);
+        a.setUnidadMedida(UnidadMedida.unidad);
+        a.setAlicuotaIva(new BigDecimal("21"));
+        return articulos.save(a);
+    }
+
+    public CostoArticulo costo(Articulo articulo, Ambito ambito, String costo) {
+        CostoArticulo c = new CostoArticulo(articulo, ambito);
+        c.setCostoActual(new BigDecimal(costo));
+        return costos.save(c);
     }
 
     // --- Usuarios ---

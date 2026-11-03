@@ -45,6 +45,14 @@ Enum tipo_articulo {
   reventa
 }
 
+Enum unidad_medida {
+  unidad [note: 'las bolsas de 80 dm³ se venden como unidad']
+  kg
+  litro
+  m3
+  dm3
+}
+
 Enum estado_pedido {
   pendiente
   confirmado
@@ -289,35 +297,55 @@ Table auditorias {
 
 Table categorias {
   id int [pk, increment]
-  nombre varchar
+  nombre varchar [note: 'único sin distinguir mayúsculas']
   descripcion text
   activo boolean
   created_at datetime
   updated_at datetime
+  note: 'Comunes a todos los ámbitos; las administra el dueño de fábrica.'
 }
 
 Table articulos {
   id int [pk, increment]
-  tipo tipo_articulo
+  ambito_id int [note: 'dueño del artículo: la fábrica para insumos y productos terminados, un local para reventa']
+  tipo tipo_articulo [note: 'no cambia después del alta']
   nombre varchar
   descripcion text
-  categoria_id int [note: 'null para insumos']
+  categoria_id int [note: 'null para insumos y obligatoria para los demás']
   marca varchar [note: 'opcional']
-  unidad_medida varchar
-  imagen varchar
-  alicuota_iva decimal
-  costo_actual decimal [note: 'se actualiza con cada compra o cierre de lote']
-  visible_web boolean
+  unidad_medida unidad_medida
+  imagen varchar [note: 'ruta dentro de assets/productos/']
+  alicuota_iva decimal [note: '0, 10.5, 21 o 27']
+  visible_web boolean [note: 'siempre false para insumos']
   activo boolean
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, nombre) [unique, note: 'sin distinguir mayúsculas']
+  }
+  note: 'La fábrica ve sus artículos. Cada local ve los productos terminados de la fábrica y su propia reventa, nunca la de otro local.'
+}
+
+Table costos_articulo {
+  id int [pk, increment]
+  articulo_id int
+  ambito_id int
+  costo_actual decimal
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (articulo_id, ambito_id) [unique]
+  }
+  note: 'Costo de un artículo en un ámbito; cada ámbito ve solo el suyo. En la fábrica, se carga a mano hasta la etapa 4 (compras y cierre de lote). En un local: la reventa, a mano hasta la etapa 4; el producto terminado, el precio de la última entrega recibida (neto si la entidad discrimina IVA, con IVA si no). El promedio ponderado se evalúa en la etapa 4.'
 }
 
 Table listas_precios {
   id int [pk, increment]
   ambito_id int [note: 'dueño de la lista: la fábrica (lista para locales) o un local']
   nombre varchar
-  precios_con_iva boolean
+  precios_con_iva boolean [note: 'siempre true si la entidad del ámbito no discrimina IVA: el precio de la lista es el precio final']
   es_predeterminada boolean [note: 'lista de venta al público del ámbito']
   activo boolean
   created_at datetime
@@ -887,7 +915,10 @@ Ref: auditorias.usuario_id > usuarios.id
 Ref: auditorias.ambito_id > ambitos.id
 Ref: auditorias.ambito_afectado_id > ambitos.id
 
+Ref: articulos.ambito_id > ambitos.id
 Ref: articulos.categoria_id > categorias.id
+Ref: costos_articulo.articulo_id > articulos.id
+Ref: costos_articulo.ambito_id > ambitos.id
 Ref: listas_precios.ambito_id > ambitos.id
 Ref: lista_precios_items.lista_id > listas_precios.id
 Ref: lista_precios_items.articulo_id > articulos.id

@@ -17,7 +17,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 ## Backend
 
 - Java 21, Spring Boot 3.4.x, Maven (usar `./mvnw`), PostgreSQL 16 y Flyway.
-- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
+- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
 - Código, tablas y endpoints en español, sin tildes ni eñes en los identificadores (`dueno_local`, `ambitos`).
 
 ### Base de datos
@@ -90,6 +90,15 @@ cd backend && ./mvnw test
 - Cada edición queda en auditoría con el valor anterior y el nuevo.
 - La sesión vive en el servidor (no JWT). Bloqueo tras 5 intentos fallidos durante 15 minutos, sesión de 30 minutos sin actividad y contraseña de al menos 10 caracteres.
 - Auditoría: cada dueño ve los registros cuyo ámbito actuante o afectado es el suyo, sin los eventos de login y sesión (`Auditor.ACCIONES_DE_ACCESO`). El administrador técnico ve todo y el empleado no ve nada.
+
+## Decisiones de catálogo y precios (etapa 2)
+
+- Plan aprobado en `docs/plan-etapa-2.md`.
+- Categorías comunes a todos los ámbitos; las administra el dueño de fábrica.
+- Cada artículo tiene un ámbito dueño (`articulos.ambito_id`): la fábrica para insumos y productos terminados, un local para la reventa.
+- La fábrica ve sus artículos. Cada local ve los productos terminados de la fábrica y su propia reventa, nunca la de otro local ni los insumos. Lo que el ámbito no ve responde 404; lo que ve pero no es suyo, 403 al editar.
+- El costo es por ámbito (`costos_articulo`) y cada ámbito ve solo el suyo. El costo de un producto de la fábrica en un local es el precio de la última entrega recibida; el promedio ponderado se evalúa en la etapa 4.
+- El IVA depende de la condición fiscal de la entidad del ámbito: el margen sobre el precio neto y el precio público con IVA solo se aplican si la entidad discrimina IVA. Para las demás, el precio de la lista es el precio final.
 
 ## Forma de trabajo
 
