@@ -344,37 +344,44 @@ Table costos_articulo {
 Table listas_precios {
   id int [pk, increment]
   ambito_id int [note: 'dueño de la lista: la fábrica (lista para locales) o un local']
-  nombre varchar
-  precios_con_iva boolean [note: 'siempre true si la entidad del ámbito no discrimina IVA: el precio de la lista es el precio final']
-  es_predeterminada boolean [note: 'lista de venta al público del ámbito']
+  nombre varchar [note: 'único dentro del ámbito, sin distinguir mayúsculas']
+  precios_con_iva boolean [note: 'siempre true si la entidad del ámbito no discrimina IVA: el precio de la lista es el precio final. Solo se cambia mientras la lista no tiene precios']
+  es_predeterminada boolean [note: 'lista de venta al público del ámbito; una sola por ámbito y siempre activa']
   activo boolean
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, nombre) [unique, note: 'sin distinguir mayúsculas']
+    ambito_id [unique, note: 'índice parcial: solo donde es_predeterminada']
+  }
 }
 
 Table lista_precios_items {
   id int [pk, increment]
   lista_id int
-  articulo_id int
-  precio decimal
+  articulo_id int [note: 'un producto terminado de la fábrica o la reventa del ámbito de la lista; nunca un insumo']
+  precio decimal [note: 'mayor que cero; con o sin IVA según la lista']
   created_at datetime
   updated_at datetime
 
   indexes {
     (lista_id, articulo_id) [unique]
   }
+  note: 'Sacar un artículo de la lista borra su fila; el historial la conserva.'
 }
 
 Table historial_precios {
   id int [pk, increment]
   lista_id int
   articulo_id int
-  precio_anterior decimal
-  precio_nuevo decimal
+  precio_anterior decimal [note: 'null al agregar el artículo a la lista']
+  precio_nuevo decimal [note: 'null al sacar el artículo de la lista']
   usuario_id int
   fecha_hora datetime
   created_at datetime
   updated_at datetime
+  note: 'Solo inserción: la base rechaza UPDATE, DELETE y TRUNCATE.'
 }
 
 Table promociones {

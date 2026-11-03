@@ -13,9 +13,13 @@ import com.greenfire.auditoria.Auditor;
 import com.greenfire.comun.Cambios;
 import com.greenfire.comun.NoEncontradoException;
 import com.greenfire.comun.ReglaNegocioException;
+import com.greenfire.fiscal.dto.AdvertenciaCondicionIva;
+import com.greenfire.fiscal.dto.EntidadFiscalEdicionResponse;
 import com.greenfire.fiscal.dto.EntidadFiscalLocalResponse;
 import com.greenfire.fiscal.dto.EntidadFiscalRequest;
 import com.greenfire.fiscal.dto.EntidadFiscalResponse;
+import com.greenfire.fiscal.dto.ListaPreciosAfectada;
+import com.greenfire.precios.ListaPreciosRepository;
 import com.greenfire.seguridad.Acceso;
 import com.greenfire.seguridad.Perfil;
 import com.greenfire.seguridad.Sesion;
@@ -33,14 +37,16 @@ public class EntidadFiscalService {
     private final EntidadFiscalRepository entidades;
     private final PuntoVentaRepository puntosVenta;
     private final AmbitoRepository ambitos;
+    private final ListaPreciosRepository listasPrecios;
     private final Acceso acceso;
     private final Auditor auditor;
 
     public EntidadFiscalService(EntidadFiscalRepository entidades, PuntoVentaRepository puntosVenta,
-            AmbitoRepository ambitos, Acceso acceso, Auditor auditor) {
+            AmbitoRepository ambitos, ListaPreciosRepository listasPrecios, Acceso acceso, Auditor auditor) {
         this.entidades = entidades;
         this.puntosVenta = puntosVenta;
         this.ambitos = ambitos;
+        this.listasPrecios = listasPrecios;
         this.acceso = acceso;
         this.auditor = auditor;
     }
@@ -89,14 +95,24 @@ public class EntidadFiscalService {
         return EntidadFiscalResponse.de(e);
     }
 
-    public EntidadFiscalResponse editar(Long id, EntidadFiscalRequest req) {
+    /**
+     * Si cambia la condición frente al IVA, los precios de las listas de la entidad quedan como están: no se
+     * recalculan ni se bloquea el cambio. La respuesta advierte qué listas hay que revisar.
+     */
+    public EntidadFiscalEdicionResponse editar(Long id, EntidadFiscalRequest req) {
         acceso.exigirAdminTecnico();
         EntidadFiscal e = buscar(id);
         if (entidades.existsByCuitAndIdNot(req.cuit(), id)) {
             throw new ReglaNegocioException("Ya existe una entidad fiscal con ese CUIT.");
         }
+        AdvertenciaCondicionIva advertencia = null;
         if (req.condicionIva() != e.getCondicionIva()) {
             validarPuntosVentaCompatibles(e, req.condicionIva());
+            List<ListaPreciosAfectada> afectadas = listasPrecios.deEntidadFiscal(id).stream()
+                    .map(ListaPreciosAfectada::de).toList();
+            if (!afectadas.isEmpty()) {
+                advertencia = new AdvertenciaCondicionIva(AdvertenciaCondicionIva.MENSAJE, afectadas);
+            }
         }
         Cambios c = new Cambios();
         e.setRazonSocial(c.registrar("razonSocial", e.getRazonSocial(), req.razonSocial()));
@@ -107,7 +123,7 @@ public class EntidadFiscalService {
         e.setArcaCertificadoVence(
                 c.registrar("arcaCertificadoVence", e.getArcaCertificadoVence(), req.arcaCertificadoVence()));
         auditor.registrarCambios("editar", ENTIDAD, id, ambitos.idsDeEntidadFiscal(id), c);
-        return EntidadFiscalResponse.de(e);
+        return new EntidadFiscalEdicionResponse(EntidadFiscalResponse.de(e), advertencia);
     }
 
     public EntidadFiscalResponse cambiarActivo(Long id, boolean activo) {

@@ -33,6 +33,10 @@ import com.greenfire.catalogo.UnidadMedida;
 import com.greenfire.fiscal.CondicionIva;
 import com.greenfire.fiscal.EntidadFiscal;
 import com.greenfire.fiscal.EntidadFiscalRepository;
+import com.greenfire.precios.ListaPrecios;
+import com.greenfire.precios.ListaPreciosItem;
+import com.greenfire.precios.ListaPreciosItemRepository;
+import com.greenfire.precios.ListaPreciosRepository;
 import com.greenfire.seguridad.Perfil;
 import com.greenfire.seguridad.Sesion;
 import com.greenfire.usuarios.Usuario;
@@ -60,10 +64,13 @@ public class Datos {
     private final CategoriaRepository categorias;
     private final ArticuloRepository articulos;
     private final CostoArticuloRepository costos;
+    private final ListaPreciosRepository listas;
+    private final ListaPreciosItemRepository precios;
 
     public Datos(EntidadFiscalRepository entidades, AmbitoRepository ambitos, UsuarioRepository usuarios,
             UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones,
-            CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos) {
+            CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos,
+            ListaPreciosRepository listas, ListaPreciosItemRepository precios) {
         this.entidades = entidades;
         this.ambitos = ambitos;
         this.usuarios = usuarios;
@@ -72,6 +79,8 @@ public class Datos {
         this.categorias = categorias;
         this.articulos = articulos;
         this.costos = costos;
+        this.listas = listas;
+        this.precios = precios;
     }
 
     // --- Entidades fiscales y ámbitos ---
@@ -143,6 +152,23 @@ public class Datos {
         CostoArticulo c = new CostoArticulo(articulo, ambito);
         c.setCostoActual(new BigDecimal(costo));
         return costos.save(c);
+    }
+
+    // --- Precios ---
+
+    public ListaPrecios lista(Ambito ambito, String nombre, boolean preciosConIva, boolean predeterminada) {
+        ListaPrecios l = new ListaPrecios();
+        l.setAmbito(ambito);
+        l.setNombre(nombre);
+        l.setPreciosConIva(preciosConIva);
+        l.setEsPredeterminada(predeterminada);
+        return listas.save(l);
+    }
+
+    public ListaPreciosItem precio(ListaPrecios lista, Articulo articulo, String precio) {
+        ListaPreciosItem i = new ListaPreciosItem(lista, articulo);
+        i.setPrecio(new BigDecimal(precio).setScale(2)); // como lo devuelve la base
+        return precios.save(i);
     }
 
     // --- Usuarios ---
