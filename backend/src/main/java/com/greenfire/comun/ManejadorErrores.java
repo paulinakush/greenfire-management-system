@@ -43,8 +43,16 @@ public class ManejadorErrores {
         return respuesta(HttpStatus.CONFLICT, e.getMessage(), null);
     }
 
+    /**
+     * Un movimiento que dejaría el stock negativo y que la validación previa no frenó (lo frena el CHECK
+     * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
+        String causa = e.getMostSpecificCause().getMessage();
+        if (causa != null && causa.contains("stock_articulos_sin_negativo")) {
+            return respuesta(HttpStatus.CONFLICT, "Stock insuficiente.", null);
+        }
         return respuesta(HttpStatus.CONFLICT, "La operación contradice datos ya registrados.", null);
     }
 

@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.greenfire.ambitos.Ambito;
 import com.greenfire.ambitos.AmbitoRepository;
-import com.greenfire.ambitos.TipoAmbito;
 import com.greenfire.auditoria.Auditor;
 import com.greenfire.catalogo.Articulo;
 import com.greenfire.catalogo.ArticuloRepository;
@@ -305,8 +304,7 @@ public class ListaPreciosService {
      */
     private Articulo articuloVendible(Long articuloId, Ambito ambito) {
         Articulo a = articulos.findById(articuloId)
-                .filter(x -> x.getAmbito().getId().equals(ambito.getId())
-                        || (ambito.getTipo() == TipoAmbito.local && x.getTipo() == TipoArticulo.producto_terminado))
+                .filter(x -> x.visiblePara(ambito))
                 .orElseThrow(() -> new NoEncontradoException("No existe el artículo indicado."));
         if (a.getTipo() == TipoArticulo.insumo) {
             throw new ReglaNegocioException("Los insumos no se venden: no llevan precio.");

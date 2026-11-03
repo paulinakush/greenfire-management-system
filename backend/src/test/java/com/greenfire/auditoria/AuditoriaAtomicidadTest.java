@@ -67,6 +67,7 @@ class AuditoriaAtomicidadTest {
             jdbc.execute("alter table auditorias drop constraint prueba_falla");
             jdbc.update("delete from usuario_ambitos where ambito_id = ?", local.getId());
             jdbc.update("delete from usuarios where id = ?", dueno.getId());
+            jdbc.update("delete from ubicaciones_stock where ambito_id = ?", local.getId()); // la "Principal" (V6)
             jdbc.update("delete from ambitos where id = ?", local.getId());
             jdbc.update("delete from entidades_fiscales where id = ?", local.getEntidadFiscal().getId());
         }

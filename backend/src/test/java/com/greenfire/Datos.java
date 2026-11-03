@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
@@ -39,6 +40,8 @@ import com.greenfire.precios.ListaPreciosItemRepository;
 import com.greenfire.precios.ListaPreciosRepository;
 import com.greenfire.seguridad.Perfil;
 import com.greenfire.seguridad.Sesion;
+import com.greenfire.stock.UbicacionStock;
+import com.greenfire.stock.UbicacionStockRepository;
 import com.greenfire.usuarios.Usuario;
 import com.greenfire.usuarios.UsuarioAmbito;
 import com.greenfire.usuarios.UsuarioAmbitoRepository;
@@ -66,11 +69,14 @@ public class Datos {
     private final CostoArticuloRepository costos;
     private final ListaPreciosRepository listas;
     private final ListaPreciosItemRepository precios;
+    private final UbicacionStockRepository ubicaciones;
+    private final JdbcTemplate jdbc;
 
     public Datos(EntidadFiscalRepository entidades, AmbitoRepository ambitos, UsuarioRepository usuarios,
             UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones,
             CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos,
-            ListaPreciosRepository listas, ListaPreciosItemRepository precios) {
+            ListaPreciosRepository listas, ListaPreciosItemRepository precios, UbicacionStockRepository ubicaciones,
+            JdbcTemplate jdbc) {
         this.entidades = entidades;
         this.ambitos = ambitos;
         this.usuarios = usuarios;
@@ -81,6 +87,8 @@ public class Datos {
         this.costos = costos;
         this.listas = listas;
         this.precios = precios;
+        this.ubicaciones = ubicaciones;
+        this.jdbc = jdbc;
     }
 
     // --- Entidades fiscales y ámbitos ---
@@ -169,6 +177,37 @@ public class Datos {
         ListaPreciosItem i = new ListaPreciosItem(lista, articulo);
         i.setPrecio(new BigDecimal(precio).setScale(2)); // como lo devuelve la base
         return precios.save(i);
+    }
+
+    // --- Stock ---
+
+    /** La ubicación "Principal" que la base crea con cada ámbito. */
+    public UbicacionStock principal(Ambito ambito) {
+        return ubicaciones.findByAmbitoIdOrderByNombre(ambito.getId()).stream()
+                .filter(u -> u.getNombre().equals("Principal")).findFirst().orElseThrow();
+    }
+
+    public UbicacionStock ubicacion(Ambito ambito, String nombre) {
+        UbicacionStock u = new UbicacionStock();
+        u.setAmbito(ambito);
+        u.setNombre(nombre);
+        return ubicaciones.save(u);
+    }
+
+    /** Carga stock con un movimiento de ajuste insertado directamente en la base (el trigger suma la cantidad). */
+    public void stock(Articulo articulo, UbicacionStock ubicacion, String cantidad) {
+        ubicaciones.flush();
+        jdbc.update("""
+                insert into movimientos_stock (articulo_id, ubicacion_stock_id, tipo, cantidad, usuario_id, motivo)
+                values (?, ?, 'ajuste', ?::numeric, ?, 'Carga de prueba')
+                """, articulo.getId(), ubicacion.getId(), cantidad, usuario("Carga").getId());
+    }
+
+    /** Cantidad actual leída de la base. */
+    public BigDecimal cantidad(Articulo articulo, UbicacionStock ubicacion) {
+        return jdbc.query("select cantidad_actual from stock_articulos where articulo_id = ? and ubicacion_stock_id = ?",
+                rs -> rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO.setScale(3), articulo.getId(),
+                ubicacion.getId());
     }
 
     // --- Usuarios ---

@@ -405,19 +405,24 @@ Table promociones {
 Table ubicaciones_stock {
   id int [pk, increment]
   ambito_id int
-  nombre varchar
-  activo boolean
+  nombre varchar [note: 'único dentro del ámbito, sin distinguir mayúsculas']
+  activo boolean [note: 'no se desactiva mientras tenga stock']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, nombre) [unique, note: 'sin distinguir mayúsculas']
+  }
+  note: 'Cada ámbito nace con una ubicación "Principal", creada por la base al dar de alta el ámbito.'
 }
 
 Table stock_articulos {
   id int [pk, increment]
-  articulo_id int
+  articulo_id int [note: 'un artículo que el ámbito de la ubicación ve: los suyos y, en un local, los productos terminados de la fábrica']
   ubicacion_stock_id int
-  stock_minimo decimal
-  stock_maximo decimal
-  cantidad_actual decimal [note: 'caché de la suma de movimientos_stock; no se edita a mano']
+  stock_minimo decimal [note: 'opcional, no negativo']
+  stock_maximo decimal [note: 'opcional, no menor que el mínimo']
+  cantidad_actual decimal [note: 'caché de la suma de movimientos_stock, que mantiene un trigger; nunca negativa y no se edita a mano']
   created_at datetime
   updated_at datetime
 
@@ -431,19 +436,20 @@ Table movimientos_stock {
   articulo_id int
   ubicacion_stock_id int
   tipo tipo_movimiento_stock
-  cantidad decimal [note: 'positiva si entra, negativa si sale']
-  lote_id int [note: 'lote del producto terminado; en produccion_consumo, el lote que consumió el insumo']
+  cantidad decimal [note: 'positiva si entra, negativa si sale; nunca cero; entera si la unidad es unidad']
+  lote_id int [note: 'lote del producto terminado; en produccion_consumo, el lote que consumió el insumo. Sin FK hasta la etapa 4']
   usuario_id int
   fecha_hora datetime
   motivo varchar [note: 'obligatorio cuando tipo = ajuste']
-  venta_id int
-  pedido_id int
-  compra_id int
-  entrega_id int
-  conteo_id int
+  venta_id int [note: 'se agrega en la etapa 3']
+  pedido_id int [note: 'se agrega en la etapa 3']
+  compra_id int [note: 'se agrega en la etapa 4']
+  entrega_id int [note: 'se agrega con el módulo 6 de la etapa 2']
+  conteo_id int [note: 'se agrega con el módulo 4 de la etapa 2']
   observaciones text
   created_at datetime
   updated_at datetime
+  note: 'Solo inserción: la base rechaza UPDATE, DELETE y TRUNCATE. Cada movimiento suma su cantidad a stock_articulos.cantidad_actual en la misma transacción.'
 }
 
 Table reservas_stock {

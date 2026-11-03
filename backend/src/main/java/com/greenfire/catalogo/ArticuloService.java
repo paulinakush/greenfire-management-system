@@ -206,7 +206,7 @@ public class ArticuloService {
         Sesion sesion = acceso.exigirPerfil(Perfil.dueno_fabrica, Perfil.dueno_local);
         Ambito ambito = ambitoDe(sesion);
         Articulo a = buscarVisible(id, ambito);
-        if (!esDe(a, ambito)) {
+        if (!a.esDe(ambito)) {
             throw new ReglaNegocioException("El costo de un producto de la fábrica en el local es el precio de la "
                     + "última entrega recibida: no se carga a mano.");
         }
@@ -228,15 +228,6 @@ public class ArticuloService {
                 ? cb.or(cb.equal(a.get("ambito").get("id"), ambito.getId()),
                         cb.equal(a.get("tipo"), TipoArticulo.producto_terminado))
                 : cb.equal(a.get("ambito").get("id"), ambito.getId());
-    }
-
-    private static boolean esVisible(Articulo a, Ambito ambito) {
-        return esDe(a, ambito)
-                || (ambito.getTipo() == TipoAmbito.local && a.getTipo() == TipoArticulo.producto_terminado);
-    }
-
-    private static boolean esDe(Articulo a, Ambito ambito) {
-        return a.getAmbito().getId().equals(ambito.getId());
     }
 
     private static boolean puedeTener(Ambito ambito, TipoArticulo tipo) {
@@ -277,14 +268,14 @@ public class ArticuloService {
 
     /** Un artículo que el ámbito no ve responde igual que uno inexistente. */
     private Articulo buscarVisible(Long id, Ambito ambito) {
-        return articulos.findById(id).filter(a -> esVisible(a, ambito))
+        return articulos.findById(id).filter(a -> a.visiblePara(ambito))
                 .orElseThrow(() -> new NoEncontradoException(NO_EXISTE));
     }
 
     /** Los productos de la fábrica se ven desde el local pero no se editan: 403. */
     private Articulo buscarPropio(Long id, Ambito ambito) {
         Articulo a = buscarVisible(id, ambito);
-        if (!esDe(a, ambito)) {
+        if (!a.esDe(ambito)) {
             throw new AccesoDenegadoException();
         }
         return a;

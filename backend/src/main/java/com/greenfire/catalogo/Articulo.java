@@ -3,6 +3,7 @@ package com.greenfire.catalogo;
 import java.math.BigDecimal;
 
 import com.greenfire.ambitos.Ambito;
+import com.greenfire.ambitos.TipoAmbito;
 import com.greenfire.comun.EntidadBase;
 
 import jakarta.persistence.Entity;
@@ -35,6 +36,15 @@ public class Articulo extends EntidadBase {
     private BigDecimal alicuotaIva;
     private boolean visibleWeb;
     private boolean activo = true;
+
+    /** Lo que ve un ámbito: sus propios artículos y, si es un local, los productos terminados de la fábrica. */
+    public boolean visiblePara(Ambito ambito) {
+        return esDe(ambito) || (ambito.getTipo() == TipoAmbito.local && tipo == TipoArticulo.producto_terminado);
+    }
+
+    public boolean esDe(Ambito ambito) {
+        return this.ambito.getId().equals(ambito.getId());
+    }
 
     public Ambito getAmbito() {
         return ambito;
