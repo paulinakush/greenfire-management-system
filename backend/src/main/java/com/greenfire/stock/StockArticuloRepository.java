@@ -1,6 +1,8 @@
 package com.greenfire.stock;
 
 import java.math.BigDecimal;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,4 +18,12 @@ public interface StockArticuloRepository extends JpaRepository<StockArticulo, Lo
 
     @Query("select count(s) > 0 from StockArticulo s where s.ubicacion.id = :ubicacionId and s.cantidadActual > 0")
     boolean tieneStock(Long ubicacionId);
+
+    /** De los artículos indicados, los que suman más de cero entre las ubicaciones activas del ámbito. */
+    @Query("""
+            select s.articulo.id from StockArticulo s
+            where s.ubicacion.ambito.id = :ambitoId and s.ubicacion.activo = true and s.articulo.id in :articulos
+            group by s.articulo.id having sum(s.cantidadActual) > 0
+            """)
+    List<Long> conStock(Long ambitoId, Collection<Long> articulos);
 }

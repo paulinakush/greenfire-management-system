@@ -58,4 +58,10 @@ public class AmbitoAdminController {
     public AmbitoResponse desactivar(@PathVariable Long id) {
         return service.cambiarActivo(id, false);
     }
+
+    /** Marca el local central, el que el catálogo público usa por defecto. Desmarca al anterior. */
+    @PostMapping("/{id}/central")
+    public AmbitoResponse marcarCentral(@PathVariable Long id) {
+        return service.marcarCentral(id);
+    }
 }

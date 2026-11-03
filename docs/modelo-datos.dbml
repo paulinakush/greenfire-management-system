@@ -208,6 +208,7 @@ Table ambitos {
   email varchar
   horarios varchar
   visible_web boolean [note: 'los locales que aparecen en "Sucursales" y se pueden elegir en un pedido']
+  es_central boolean [note: 'el local que el catálogo público usa por defecto: a lo sumo uno, y tiene que ser un local activo y visible en la web. Lo cambia solo el administrador técnico']
   activo boolean
   created_at datetime
   updated_at datetime

@@ -25,6 +25,7 @@ public class Ambito extends EntidadBase {
     private String email;
     private String horarios;
     private boolean visibleWeb;
+    private boolean esCentral;
     private boolean activo = true;
 
     public TipoAmbito getTipo() {
@@ -89,6 +90,14 @@ public class Ambito extends EntidadBase {
 
     public void setVisibleWeb(boolean visibleWeb) {
         this.visibleWeb = visibleWeb;
+    }
+
+    public boolean isEsCentral() {
+        return esCentral;
+    }
+
+    public void setEsCentral(boolean esCentral) {
+        this.esCentral = esCentral;
     }
 
     public boolean isActivo() {

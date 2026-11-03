@@ -14,11 +14,12 @@ public record AmbitoResponse(
         String email,
         String horarios,
         boolean visibleWeb,
+        boolean esCentral,
         boolean activo) {
 
     public static AmbitoResponse de(Ambito a) {
         return new AmbitoResponse(a.getId(), a.getTipo(), a.getNombre(), a.getEntidadFiscal().getId(),
                 a.getEntidadFiscal().getRazonSocial(), a.getDireccion(), a.getTelefono(), a.getEmail(),
-                a.getHorarios(), a.isVisibleWeb(), a.isActivo());
+                a.getHorarios(), a.isVisibleWeb(), a.isEsCentral(), a.isActivo());
     }
 }

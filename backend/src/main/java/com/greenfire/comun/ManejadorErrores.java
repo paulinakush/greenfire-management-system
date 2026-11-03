@@ -38,6 +38,11 @@ public class ManejadorErrores {
         return respuesta(HttpStatus.NOT_FOUND, e.getMessage(), null);
     }
 
+    @ExceptionHandler(SolicitudInvalidaException.class)
+    ResponseEntity<ApiError> solicitudInvalida(SolicitudInvalidaException e) {
+        return respuesta(HttpStatus.BAD_REQUEST, e.getMessage(), null);
+    }
+
     @ExceptionHandler(ReglaNegocioException.class)
     ResponseEntity<ApiError> reglaNegocio(ReglaNegocioException e) {
         return respuesta(HttpStatus.CONFLICT, e.getMessage(), null);
@@ -46,7 +51,8 @@ public class ManejadorErrores {
     /**
      * Un movimiento que dejaría el stock negativo y que la validación previa no frenó (lo frena el CHECK
      * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}. Dos conteos
-     * abiertos a la vez en una ubicación los frena el índice uq_conteos_stock_abierto (V7).
+     * abiertos a la vez en una ubicación los frena el índice uq_conteos_stock_abierto (V7). El local central lo
+     * cuidan ambitos_central_valido y uq_ambitos_central (V8).
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
@@ -56,6 +62,13 @@ public class ManejadorErrores {
         }
         if (causa != null && causa.contains("uq_conteos_stock_abierto")) {
             return respuesta(HttpStatus.CONFLICT, "Ya hay un conteo abierto en esa ubicación.", null);
+        }
+        if (causa != null && causa.contains("ambitos_central_valido")) {
+            return respuesta(HttpStatus.CONFLICT,
+                    "El local central tiene que ser un local activo y visible en la web.", null);
+        }
+        if (causa != null && causa.contains("uq_ambitos_central")) {
+            return respuesta(HttpStatus.CONFLICT, "Ya hay otro local central.", null);
         }
         return respuesta(HttpStatus.CONFLICT, "La operación contradice datos ya registrados.", null);
     }

@@ -27,6 +27,7 @@ import com.greenfire.seguridad.Sesion;
 public class AmbitoService {
 
     private static final String ENTIDAD = "ambito";
+    private static final String MENSAJE_CENTRAL = "Es el local central: para %s, primero marcá otro local como central.";
 
     private final AmbitoRepository ambitos;
     private final EntidadFiscalRepository entidades;
@@ -87,6 +88,9 @@ public class AmbitoService {
         acceso.exigirAdminTecnico();
         Ambito a = buscar(id);
         validarVisibleWeb(a.getTipo(), req.visibleWeb());
+        if (!req.visibleWeb()) {
+            validarNoEsCentral(a, "ocultarlo de la web");
+        }
         Cambios c = new Cambios();
         a.setNombre(c.registrar("nombre", a.getNombre(), req.nombre()));
         a.setDireccion(c.registrar("direccion", a.getDireccion(), req.direccion()));
@@ -101,10 +105,40 @@ public class AmbitoService {
     public AmbitoResponse cambiarActivo(Long id, boolean activo) {
         acceso.exigirAdminTecnico();
         Ambito a = buscar(id);
+        if (!activo) {
+            validarNoEsCentral(a, "desactivarlo");
+        }
         Cambios c = new Cambios();
         a.setActivo(c.registrar("activo", a.isActivo(), activo));
         auditor.registrarCambios(activo ? "activar" : "desactivar", ENTIDAD, id, List.of(id), c);
         return AmbitoResponse.de(a);
+    }
+
+    /**
+     * Marca el local central y desmarca al anterior, en la misma transacción; cada uno queda auditado con su
+     * ámbito. La base exige que sea un local activo y visible en la web y que no haya dos (V8); acá se valida
+     * antes para dar un mensaje claro.
+     */
+    public AmbitoResponse marcarCentral(Long id) {
+        acceso.exigirAdminTecnico();
+        Ambito nuevo = buscar(id);
+        if (nuevo.isEsCentral()) {
+            return AmbitoResponse.de(nuevo);
+        }
+        if (nuevo.getTipo() != TipoAmbito.local || !nuevo.isActivo() || !nuevo.isVisibleWeb()) {
+            throw new ReglaNegocioException("El local central tiene que ser un local activo y visible en la web.");
+        }
+        ambitos.findByEsCentralTrue().ifPresent(anterior -> {
+            Cambios c = new Cambios();
+            anterior.setEsCentral(c.registrar("esCentral", true, false));
+            ambitos.flush(); // el índice único no deja marcar el nuevo antes de desmarcar el anterior
+            auditor.registrarCambios("desmarcar_central", ENTIDAD, anterior.getId(), List.of(anterior.getId()), c);
+        });
+        Cambios c = new Cambios();
+        nuevo.setEsCentral(c.registrar("esCentral", false, true));
+        ambitos.flush();
+        auditor.registrarCambios("marcar_central", ENTIDAD, id, List.of(id), c);
+        return AmbitoResponse.de(nuevo);
     }
 
     // --- Usuarios de un ámbito ---
@@ -139,6 +173,12 @@ public class AmbitoService {
     private void validarVisibleWeb(TipoAmbito tipo, boolean visibleWeb) {
         if (visibleWeb && tipo == TipoAmbito.fabrica) {
             throw new ReglaNegocioException("La fábrica no se muestra en la web: solo los locales.");
+        }
+    }
+
+    private void validarNoEsCentral(Ambito a, String accion) {
+        if (a.isEsCentral()) {
+            throw new ReglaNegocioException(MENSAJE_CENTRAL.formatted(accion));
         }
     }
 
