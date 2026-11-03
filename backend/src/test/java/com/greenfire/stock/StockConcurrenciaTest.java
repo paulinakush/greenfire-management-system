@@ -6,9 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -32,6 +30,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.greenfire.Datos;
+import com.greenfire.DatosConfirmados;
 import com.greenfire.PruebaIntegracion;
 import com.greenfire.ambitos.Ambito;
 import com.greenfire.catalogo.Articulo;
@@ -41,16 +40,11 @@ import com.greenfire.seguridad.Perfil;
 
 /**
  * Operaciones con transacciones reales, que se confirman o se revierten de verdad: este test no corre dentro de
- * la transacción del test (NOT_SUPPORTED). Lo que deja guardado lo borra {@link #limpiar()}, con los triggers
- * desactivados, porque los movimientos son solo de inserción.
+ * la transacción del test (NOT_SUPPORTED). Lo que deja guardado lo borra {@link DatosConfirmados}.
  */
 @PruebaIntegracion
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class StockConcurrenciaTest {
-
-    /** Tablas con datos de estos tests, en orden de borrado. */
-    private static final List<String> TABLAS = List.of("movimientos_stock", "stock_articulos", "ubicaciones_stock",
-            "articulos", "categorias", "auditorias", "usuario_ambitos", "usuarios", "ambitos", "entidades_fiscales");
 
     @Autowired
     MockMvc mvc;
@@ -66,7 +60,7 @@ class StockConcurrenciaTest {
     ObjectMapper mapper;
 
     ExecutorService hilos = Executors.newFixedThreadPool(2);
-    Map<String, Long> ultimoId = new HashMap<>();
+    DatosConfirmados confirmados;
 
     Ambito local;
     Categoria categoria;
@@ -74,9 +68,7 @@ class StockConcurrenciaTest {
 
     @BeforeEach
     void datos() {
-        for (String tabla : TABLAS) {
-            ultimoId.put(tabla, jdbc.queryForObject("select coalesce(max(id), 0) from " + tabla, Long.class));
-        }
+        confirmados = new DatosConfirmados(jdbc, transaccion);
         local = datos.local("Concurrencia");
         categoria = datos.categoria("Macetas");
         principal = datos.principal(local);
@@ -85,19 +77,7 @@ class StockConcurrenciaTest {
     @AfterEach
     void limpiar() {
         hilos.shutdownNow();
-        transaccion.executeWithoutResult(estado -> {
-            jdbc.execute("set local session_replication_role = replica");
-            Long usuarioDesde = ultimoId.get("usuarios");
-            String nuevos = "select id::text from usuarios where id > ?";
-            jdbc.update("""
-                    delete from spring_session_attributes where session_primary_id in
-                        (select primary_id from spring_session where principal_name in (%s))
-                    """.formatted(nuevos), usuarioDesde);
-            jdbc.update("delete from spring_session where principal_name in (%s)".formatted(nuevos), usuarioDesde);
-            for (String tabla : TABLAS) {
-                jdbc.update("delete from " + tabla + " where id > ?", ultimoId.get(tabla));
-            }
-        });
+        confirmados.limpiar();
     }
 
     @Test
@@ -173,7 +153,7 @@ class StockConcurrenciaTest {
         assertThat(datos.cantidad(maceta, principal)).isEqualByComparingTo("0");
         assertThat(datos.cantidad(regadera, principal)).isEqualByComparingTo("1");
         assertThat(jdbc.queryForObject("select count(*) from auditorias where accion = 'ajustar_stock' and id > ?",
-                Integer.class, ultimoId.get("auditorias"))).isZero();
+                Integer.class, confirmados.ultimoId("auditorias"))).isZero();
     }
 
     private Callable<MockHttpServletResponse> ajuste(RequestPostProcessor sesion, String motivo, Articulo articulo,

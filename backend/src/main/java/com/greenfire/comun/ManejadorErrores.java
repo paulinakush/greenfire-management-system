@@ -45,13 +45,17 @@ public class ManejadorErrores {
 
     /**
      * Un movimiento que dejaría el stock negativo y que la validación previa no frenó (lo frena el CHECK
-     * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}.
+     * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}. Dos conteos
+     * abiertos a la vez en una ubicación los frena el índice uq_conteos_stock_abierto (V7).
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
         String causa = e.getMostSpecificCause().getMessage();
         if (causa != null && causa.contains("stock_articulos_sin_negativo")) {
             return respuesta(HttpStatus.CONFLICT, "Stock insuficiente.", null);
+        }
+        if (causa != null && causa.contains("uq_conteos_stock_abierto")) {
+            return respuesta(HttpStatus.CONFLICT, "Ya hay un conteo abierto en esa ubicación.", null);
         }
         return respuesta(HttpStatus.CONFLICT, "La operación contradice datos ya registrados.", null);
     }

@@ -178,6 +178,7 @@ Enum estado_lote {
 Enum estado_conteo {
   abierto
   cerrado
+  anulado
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +446,7 @@ Table movimientos_stock {
   pedido_id int [note: 'se agrega en la etapa 3']
   compra_id int [note: 'se agrega en la etapa 4']
   entrega_id int [note: 'se agrega con el módulo 6 de la etapa 2']
-  conteo_id int [note: 'se agrega con el módulo 4 de la etapa 2']
+  conteo_id int [note: 'obligatorio si y solo si tipo = conteo; de un conteo de la misma ubicación']
   observaciones text
   created_at datetime
   updated_at datetime
@@ -469,23 +470,34 @@ Table reservas_stock {
 Table conteos_stock {
   id int [pk, increment]
   ubicacion_stock_id int
-  usuario_id int
-  fecha date
+  usuario_id int [note: 'quien lo abrió']
+  fecha date [note: 'día de apertura, en la zona horaria de la empresa']
   estado estado_conteo
   observaciones text
+  cerrado_at datetime [note: 'solo si está cerrado']
+  anulado_at datetime [note: 'solo si está anulado']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    ubicacion_stock_id [unique, note: 'índice parcial: un solo conteo abierto por ubicación']
+  }
+  note: 'Un conteo cerrado o anulado no se modifica, y ningún conteo se borra (la base lo rechaza).'
 }
 
 Table detalle_conteo {
   id int [pk, increment]
   conteo_id int
-  articulo_id int
-  cantidad_sistema decimal
-  cantidad_contada decimal
+  articulo_id int [note: 'un artículo que el ámbito de la ubicación ve']
+  cantidad_sistema decimal [note: 'se toma al cerrar; null mientras está abierto']
+  cantidad_contada decimal [note: 'no negativa; entera si la unidad es unidad']
   created_at datetime
   updated_at datetime
-  note: 'La diferencia se calcula y genera un movimiento tipo conteo al cerrar.'
+
+  indexes {
+    (conteo_id, articulo_id) [unique]
+  }
+  note: 'Solo se carga mientras el conteo está abierto. Al cerrar, cada diferencia distinta de cero genera un movimiento tipo conteo.'
 }
 
 // ---------------------------------------------------------------------------

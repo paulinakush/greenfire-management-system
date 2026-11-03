@@ -310,3 +310,9 @@ Ver punto 6.
 - **El costo de un artículo en el local es el precio de la última entrega recibida.**
   - Hasta el módulo 6, los productos terminados no tienen costo en los locales.
   - El promedio ponderado se evalúa en la etapa 4, junto con las compras y el costo de los lotes.
+
+## 9. Para revisar en la etapa 3
+
+- **Ajustes de productos de la fábrica en un local.**
+  - El problema: un dueño de local puede ajustar el stock de un producto terminado de la fábrica, por ejemplo sumarle unidades, sin que haya una entrega ni una deuda con la fábrica.
+  - Evaluar cómo detectarlo: por ejemplo, un reporte de ajustes positivos de productos de la fábrica en cada local, una alerta para la fábrica o un límite a esos ajustes.

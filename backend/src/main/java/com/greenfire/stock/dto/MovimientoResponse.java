@@ -18,13 +18,15 @@ public record MovimientoResponse(
         String motivo,
         String observaciones,
         Long loteId,
+        Long conteoId,
         Long usuarioId,
         String usuarioNombre) {
 
     public static MovimientoResponse de(MovimientoStock m) {
         return new MovimientoResponse(m.getId(), m.getFechaHora(), m.getTipo(), m.getArticulo().getId(),
                 m.getArticulo().getNombre(), m.getUbicacion().getId(), m.getUbicacion().getNombre(), m.getCantidad(),
-                m.getMotivo(), m.getObservaciones(), m.getLoteId(), m.getUsuario().getId(),
+                m.getMotivo(), m.getObservaciones(), m.getLoteId(),
+                m.getConteo() == null ? null : m.getConteo().getId(), m.getUsuario().getId(),
                 m.getUsuario().getNombre());
     }
 }
