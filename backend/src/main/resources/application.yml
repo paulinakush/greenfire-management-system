@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: greenfire-gestion
+  # Credenciales en el .env de la raíz del repo (el mismo que usa docker compose).
+  config:
+    import: optional:file:../.env[.properties]
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${POSTGRES_DB:greenfire}
+    username: ${POSTGRES_USER:greenfire}
+    password: ${POSTGRES_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  session:
+    jdbc:
+      # Las tablas de sesión las crea Flyway (V1).
+      initialize-schema: never
+  jackson:
+    # Un campo que no corresponde (por ejemplo, el dueño mandando el nombre del local) es un error, no se ignora.
+    deserialization:
+      fail-on-unknown-properties: true
+
+server:
+  servlet:
+    session:
+      # Sesión de 30 minutos sin actividad.
+      timeout: 30m
+      cookie:
+        http-only: true
+        same-site: lax
+        # true en producción (solo HTTPS).
+        secure: ${COOKIE_SECURE:false}
+
+greenfire:
+  # Zona horaria de la empresa, para interpretar fechas sin hora (por ejemplo, los filtros por día).
+  zona-horaria: America/Argentina/Buenos_Aires
+  seguridad:
+    intentos-maximos: 5
+    bloqueo: 15m
+  recuperacion:
+    vigencia: 1h
+    # Solo desarrollo: escribe en el log el link para restablecer la contraseña.
+    # En producción la restablece el administrador técnico.
+    log-enlace: ${RECUPERACION_LOG_ENLACE:false}
+  admin-inicial:
+    nombre: ${ADMIN_NOMBRE:}
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+  front:
+    # Raíz del repo, relativa a backend/ (desde donde se corre la app).
+    dir: ${FRONT_DIR:..}

@@ -1,0 +1,88 @@
+package com.greenfire.comun;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.ErrorResponse;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import com.greenfire.auditoria.AuditoriaException;
+
+@RestControllerAdvice
+public class ManejadorErrores {
+
+    private static final Logger log = LoggerFactory.getLogger(ManejadorErrores.class);
+
+    @ExceptionHandler(NoAutenticadoException.class)
+    ResponseEntity<ApiError> noAutenticado(NoAutenticadoException e) {
+        return respuesta(HttpStatus.UNAUTHORIZED, e.getMessage(), null);
+    }
+
+    @ExceptionHandler(AccesoDenegadoException.class)
+    ResponseEntity<ApiError> accesoDenegado(AccesoDenegadoException e) {
+        return respuesta(HttpStatus.FORBIDDEN, e.getMessage(), null);
+    }
+
+    @ExceptionHandler(NoEncontradoException.class)
+    ResponseEntity<ApiError> noEncontrado(NoEncontradoException e) {
+        return respuesta(HttpStatus.NOT_FOUND, e.getMessage(), null);
+    }
+
+    @ExceptionHandler(ReglaNegocioException.class)
+    ResponseEntity<ApiError> reglaNegocio(ReglaNegocioException e) {
+        return respuesta(HttpStatus.CONFLICT, e.getMessage(), null);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
+        return respuesta(HttpStatus.CONFLICT, "La operación contradice datos ya registrados.", null);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    ResponseEntity<ApiError> validacion(MethodArgumentNotValidException e) {
+        Map<String, String> campos = new LinkedHashMap<>();
+        e.getBindingResult().getFieldErrors().forEach(f -> campos.putIfAbsent(f.getField(), f.getDefaultMessage()));
+        return respuesta(HttpStatus.BAD_REQUEST, "Hay datos inválidos.", campos);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiError> cuerpoInvalido(HttpMessageNotReadableException e) {
+        return respuesta(HttpStatus.BAD_REQUEST, "El cuerpo de la solicitud no es válido.", null);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ApiError> parametroInvalido(MethodArgumentTypeMismatchException e) {
+        return respuesta(HttpStatus.BAD_REQUEST, "El parámetro '" + e.getName() + "' no es válido.", null);
+    }
+
+    @ExceptionHandler(AuditoriaException.class)
+    ResponseEntity<ApiError> auditoria(AuditoriaException e) {
+        log.error("Falló el registro de auditoría; la operación se revirtió.", e);
+        return respuesta(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage(), null);
+    }
+
+    /** Cualquier otro error: 500 sin detalles internos. Las excepciones de Spring MVC conservan su código. */
+    @ExceptionHandler(RuntimeException.class)
+    ResponseEntity<ApiError> inesperado(RuntimeException e) {
+        if (e instanceof ErrorResponse conocido) {
+            HttpStatusCode codigo = conocido.getStatusCode();
+            return respuesta(HttpStatus.valueOf(codigo.value()), conocido.getBody().getDetail(), null);
+        }
+        log.error("Error no controlado", e);
+        return respuesta(HttpStatus.INTERNAL_SERVER_ERROR, "Ocurrió un error inesperado.", null);
+    }
+
+    private ResponseEntity<ApiError> respuesta(HttpStatus status, String mensaje, Map<String, String> campos) {
+        return ResponseEntity.status(status).body(new ApiError(status.value(), status.name(), mensaje, campos));
+    }
+}

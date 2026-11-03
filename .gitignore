@@ -1,0 +1,11 @@
+# Credenciales locales
+.env
+
+# Build del backend
+backend/target/
+
+# IDE y sistema
+.idea/
+.vscode/
+*.iml
+.DS_Store
