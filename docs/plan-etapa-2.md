@@ -320,3 +320,6 @@ Ver punto 6.
   - Hoy (módulo 6): al confirmar la recepción, el costo del producto en el local pasa a ser el precio unitario de la entrega tal cual, sin ajustes de IVA. Reemplaza lo que decía el punto 5 (neto si el local discrimina IVA, con IVA si no).
   - El problema: el tratamiento del IVA en ese costo depende de la condición fiscal de la fábrica y del local (si la fábrica factura con IVA discriminado y si el local lo puede computar), y de si la lista de la fábrica para locales es con o sin IVA.
   - Lo tiene que confirmar el contador antes de usar las entregas en producción. Según lo que defina, se ajusta `EntregaService.actualizarCostos`.
+- **Entregas enviadas que nunca se reciben.**
+  - El problema: el stock sale de la fábrica al enviar y entra al local recién al recibir. Si una entrega queda en `enviada` para siempre, ese stock no está en ningún lado: queda en limbo, sin que nadie lo vea en su stock.
+  - Evaluar un aviso (por ejemplo, entregas enviadas hace más de N días, para la fábrica y para el local) o un vencimiento que obligue a recibirla o a anularla.
