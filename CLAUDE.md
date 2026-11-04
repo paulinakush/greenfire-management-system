@@ -17,7 +17,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 ## Backend
 
 - Java 21, Spring Boot 3.4.x, Maven (usar `./mvnw`), PostgreSQL 16 y Flyway.
-- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
+- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
 - Código, tablas y endpoints en español, sin tildes ni eñes en los identificadores (`dueno_local`, `ambitos`).
 
 ### Base de datos
@@ -99,6 +99,12 @@ cd backend && ./mvnw test
 - La fábrica ve sus artículos. Cada local ve los productos terminados de la fábrica y su propia reventa, nunca la de otro local ni los insumos. Lo que el ámbito no ve responde 404; lo que ve pero no es suyo, 403 al editar.
 - El costo es por ámbito (`costos_articulo`) y cada ámbito ve solo el suyo. El costo de un producto de la fábrica en un local es el precio de la última entrega recibida; el promedio ponderado se evalúa en la etapa 4.
 - El IVA depende de la condición fiscal de la entidad del ámbito: el margen sobre el precio neto y el precio público con IVA solo se aplican si la entidad discrimina IVA. Para las demás, el precio de la lista es el precio final.
+
+## Decisiones de entregas (etapa 2)
+
+- **Las entregas de la fábrica a los locales se construyen en la etapa 2, pero no se usan en producción hasta la etapa 3.** Recién entonces generan la cuenta corriente (la deuda del local) y el remito; hasta ahí, solo con datos de prueba.
+- Estados: `enviada`, `recibida`, `diferencia_informada` y `anulada`. La base solo admite pasar de `enviada` a uno de los otros tres, y resolver una diferencia una sola vez.
+- Al confirmar la recepción, el costo del producto en el local pasa a ser el precio unitario de la entrega, tal cual, sin ajustes de IVA. El tratamiento del IVA en ese costo queda para confirmar con el contador en la etapa 3.
 
 ## Forma de trabajo
 

@@ -138,6 +138,12 @@ Enum estado_entrega {
   enviada
   recibida
   diferencia_informada
+  anulada
+}
+
+Enum resolucion_diferencia {
+  reingreso [note: 'el faltante vuelve al stock de la fábrica (movimiento devolucion)']
+  perdida [note: 'el faltante se da por perdido; no genera movimiento']
 }
 
 Enum tipo_movimiento_cc {
@@ -340,7 +346,7 @@ Table costos_articulo {
   indexes {
     (articulo_id, ambito_id) [unique]
   }
-  note: 'Costo de un artículo en un ámbito; cada ámbito ve solo el suyo. En la fábrica, se carga a mano hasta la etapa 4 (compras y cierre de lote). En un local: la reventa, a mano hasta la etapa 4; el producto terminado, el precio de la última entrega recibida (neto si la entidad discrimina IVA, con IVA si no). El promedio ponderado se evalúa en la etapa 4.'
+  note: 'Costo de un artículo en un ámbito; cada ámbito ve solo el suyo. En la fábrica, se carga a mano hasta la etapa 4 (compras y cierre de lote). En un local: la reventa, a mano hasta la etapa 4; el producto terminado, el precio unitario de la última entrega recibida, tal cual, sin ajustes de IVA (el tratamiento del IVA lo confirma el contador en la etapa 3). El promedio ponderado se evalúa en la etapa 4.'
 }
 
 Table listas_precios {
@@ -446,7 +452,7 @@ Table movimientos_stock {
   venta_id int [note: 'se agrega en la etapa 3']
   pedido_id int [note: 'se agrega en la etapa 3']
   compra_id int [note: 'se agrega en la etapa 4']
-  entrega_id int [note: 'se agrega con el módulo 6 de la etapa 2']
+  entrega_id int [note: 'obligatorio si y solo si tipo es entrega_salida, entrega_recepcion, anulacion o devolucion; salida, anulación y devolución en la ubicación de origen, recepción en la de destino']
   conteo_id int [note: 'obligatorio si y solo si tipo = conteo; de un conteo de la misma ubicación']
   observaciones text
   created_at datetime
@@ -655,18 +661,23 @@ Table entregas {
   ambito_origen_id int
   ambito_destino_id int
   ubicacion_origen_id int
-  ubicacion_destino_id int
-  lista_precios_id int
-  estado estado_entrega
+  ubicacion_destino_id int [note: 'la elige el local al recibir; de su ámbito']
+  lista_precios_id int [note: 'lista de la fábrica de la que sale el precio']
+  estado estado_entrega [note: 'enviada pasa a recibida, diferencia_informada o anulada; ningún otro cambio']
   usuario_envio_id int
   fecha_envio datetime
   usuario_recepcion_id int
   fecha_recepcion datetime
-  remito_id int [note: 'comprobante tipo remito, con precio, del ámbito origen']
-  factura_id int [note: 'según la condición fiscal; se asocia al remito y no suma deuda']
-  nota_credito_id int [note: 'cuando la fábrica resuelve una diferencia con nota de crédito']
+  usuario_anulacion_id int
+  anulada_at datetime [note: 'solo una entrega enviada, antes de la recepción']
+  remito_id int [note: 'comprobante tipo remito, con precio, del ámbito origen; se agrega en la etapa 3']
+  factura_id int [note: 'según la condición fiscal; se asocia al remito y no suma deuda; etapa 3']
+  nota_credito_id int [note: 'cuando la fábrica resuelve una diferencia con nota de crédito; etapa 3']
+  resolucion_diferencia resolucion_diferencia [note: 'solo en diferencia_informada; una vez resuelta no cambia']
+  motivo_resolucion varchar [note: 'obligatorio al resolver']
+  usuario_resolucion_id int
   diferencia_resuelta_at datetime
-  total decimal
+  total decimal [note: 'suma de los subtotales de lo enviado']
   observaciones text
   observaciones_recepcion text [note: 'diferencias informadas por el destino']
   created_at datetime
@@ -679,12 +690,17 @@ Table detalle_entregas {
   entrega_id int
   articulo_id int
   lote_id int
-  cantidad_enviada decimal
-  cantidad_recibida decimal [note: 'la carga el destino al confirmar la recepción']
-  precio_unitario decimal
-  subtotal decimal
+  cantidad_enviada decimal [note: 'mayor que cero']
+  cantidad_recibida decimal [note: 'la carga el destino al confirmar la recepción, una sola vez; nunca mayor que la enviada']
+  precio_unitario decimal [note: 'el de la lista de la fábrica al enviar']
+  subtotal decimal [note: 'cantidad_enviada × precio_unitario, redondeado a dos decimales']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (entrega_id, articulo_id, lote_id) [unique, note: 'un renglón por artículo y lote']
+  }
+  note: 'Solo productos terminados del ámbito origen. No se borra.'
 }
 
 // ---------------------------------------------------------------------------
@@ -1010,6 +1026,8 @@ Ref: entregas.ubicacion_destino_id > ubicaciones_stock.id
 Ref: entregas.lista_precios_id > listas_precios.id
 Ref: entregas.usuario_envio_id > usuarios.id
 Ref: entregas.usuario_recepcion_id > usuarios.id
+Ref: entregas.usuario_anulacion_id > usuarios.id
+Ref: entregas.usuario_resolucion_id > usuarios.id
 Ref: entregas.remito_id > comprobantes.id
 Ref: entregas.factura_id > comprobantes.id
 Ref: entregas.nota_credito_id > comprobantes.id

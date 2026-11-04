@@ -111,7 +111,7 @@ class StockMigracionTest {
         rechaza(() -> movimiento(coco.getId(), principalFabrica, "ajuste", "1", null));
         rechaza(() -> movimiento(coco.getId(), principalFabrica, "ajuste", "1", "   "));
         rechaza(() -> movimiento(coco.getId(), principalFabrica, "ajuste", "0", "Carga"));
-        movimiento(coco.getId(), principalFabrica, "entrega_recepcion", "1", null); // los demás tipos no lo exigen
+        movimiento(coco.getId(), principalFabrica, "compra", "1", null); // los demás tipos no lo exigen
     }
 
     @Test

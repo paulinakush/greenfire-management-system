@@ -93,13 +93,13 @@ public class UbicacionService {
         return UbicacionResponse.de(u);
     }
 
-    // --- Usados también por StockService ---
+    // --- Usados también por StockService, ConteoService y EntregaService ---
 
     Sesion exigirDueno() {
         return acceso.exigirPerfil(Perfil.dueno_fabrica, Perfil.dueno_local);
     }
 
-    Ambito ambitoDe(Sesion sesion) {
+    public Ambito ambitoDe(Sesion sesion) {
         return ambitos.findById(sesion.ambitoId()).orElseThrow(() -> new NoEncontradoException("No existe el ámbito."));
     }
 
@@ -110,7 +110,7 @@ public class UbicacionService {
     }
 
     /** Para operar: además de ser del ámbito, tiene que estar activa. */
-    UbicacionStock buscarActiva(Long id, Ambito ambito) {
+    public UbicacionStock buscarActiva(Long id, Ambito ambito) {
         UbicacionStock u = buscar(id, ambito);
         if (!u.isActivo()) {
             throw new ReglaNegocioException("La ubicación '" + u.getNombre() + "' está desactivada.");

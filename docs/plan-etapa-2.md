@@ -316,3 +316,7 @@ Ver punto 6.
 - **Ajustes de productos de la fábrica en un local.**
   - El problema: un dueño de local puede ajustar el stock de un producto terminado de la fábrica, por ejemplo sumarle unidades, sin que haya una entrega ni una deuda con la fábrica.
   - Evaluar cómo detectarlo: por ejemplo, un reporte de ajustes positivos de productos de la fábrica en cada local, una alerta para la fábrica o un límite a esos ajustes.
+- **IVA en el costo que deja una entrega en el local.**
+  - Hoy (módulo 6): al confirmar la recepción, el costo del producto en el local pasa a ser el precio unitario de la entrega tal cual, sin ajustes de IVA. Reemplaza lo que decía el punto 5 (neto si el local discrimina IVA, con IVA si no).
+  - El problema: el tratamiento del IVA en ese costo depende de la condición fiscal de la fábrica y del local (si la fábrica factura con IVA discriminado y si el local lo puede computar), y de si la lista de la fábrica para locales es con o sin IVA.
+  - Lo tiene que confirmar el contador antes de usar las entregas en producción. Según lo que defina, se ajusta `EntregaService.actualizarCostos`.

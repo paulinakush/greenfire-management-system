@@ -3,9 +3,11 @@ package com.greenfire.stock;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,7 +22,7 @@ import jakarta.persistence.EntityManager;
 
 /**
  * Punto único para registrar movimientos de stock, como {@link com.greenfire.auditoria.Auditor} para la auditoría.
- * Lo usan los ajustes y, después, los conteos, las entregas, las ventas, las compras y la producción. No valida
+ * Lo usan los ajustes, los conteos y las entregas y, después, las ventas, las compras y la producción. No valida
  * permisos: eso lo hace cada servicio antes de llamarlo.
  * <p>
  * Corre siempre dentro de la transacción de la operación (MANDATORY): si un renglón falla, no se aplica ninguno.
@@ -45,6 +47,9 @@ public class RegistroStock {
             .<Renglon, Long>comparing(r -> r.articulo().getId())
             .thenComparing(r -> r.ubicacion().getId());
 
+    private static final Set<TipoMovimientoStock> TIPOS_DE_ENTREGA = EnumSet.of(TipoMovimientoStock.entrega_salida,
+            TipoMovimientoStock.entrega_recepcion, TipoMovimientoStock.anulacion, TipoMovimientoStock.devolucion);
+
     private final MovimientoStockRepository movimientos;
     private final UsuarioRepository usuarios;
     private final EntityManager em;
@@ -61,13 +66,25 @@ public class RegistroStock {
         if (tipo == TipoMovimientoStock.conteo) {
             throw new IllegalArgumentException("Los movimientos de conteo se registran con registrarConteo.");
         }
-        return registrar(tipo, renglones, motivo, observaciones, usuarioId, null);
+        if (TIPOS_DE_ENTREGA.contains(tipo)) {
+            throw new IllegalArgumentException("Los movimientos de una entrega se registran con registrarEntrega.");
+        }
+        return registrar(tipo, renglones, motivo, observaciones, usuarioId, null, null);
     }
 
     /** Las diferencias de un conteo, como movimientos de tipo conteo que apuntan a él. */
     public List<MovimientoStock> registrarConteo(ConteoStock conteo, List<Renglon> renglones, String motivo,
             Long usuarioId) {
-        return registrar(TipoMovimientoStock.conteo, renglones, motivo, null, usuarioId, conteo);
+        return registrar(TipoMovimientoStock.conteo, renglones, motivo, null, usuarioId, conteo, null);
+    }
+
+    /** Los movimientos de una entrega (salida, recepción, anulación o devolución), que apuntan a ella. */
+    public List<MovimientoStock> registrarEntrega(TipoMovimientoStock tipo, Long entregaId, List<Renglon> renglones,
+            String motivo, Long usuarioId) {
+        if (!TIPOS_DE_ENTREGA.contains(tipo)) {
+            throw new IllegalArgumentException("El tipo " + tipo + " no es de una entrega.");
+        }
+        return registrar(tipo, renglones, motivo, null, usuarioId, null, entregaId);
     }
 
     /**
@@ -93,7 +110,7 @@ public class RegistroStock {
     }
 
     private List<MovimientoStock> registrar(TipoMovimientoStock tipo, List<Renglon> renglones, String motivo,
-            String observaciones, Long usuarioId, ConteoStock conteo) {
+            String observaciones, Long usuarioId, ConteoStock conteo, Long entregaId) {
         if (renglones.isEmpty()) {
             throw new ReglaNegocioException("La operación no tiene renglones.");
         }
@@ -111,7 +128,7 @@ public class RegistroStock {
                 }
             }
             registrados.add(movimientos.save(new MovimientoStock(r.articulo(), r.ubicacion(), tipo, r.cantidad(),
-                    r.loteId(), usuarios.getReferenceById(usuarioId), motivo, observaciones, conteo)));
+                    r.loteId(), usuarios.getReferenceById(usuarioId), motivo, observaciones, conteo, entregaId)));
         }
         return registrados;
     }

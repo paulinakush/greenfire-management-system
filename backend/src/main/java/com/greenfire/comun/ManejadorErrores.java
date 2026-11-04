@@ -52,7 +52,8 @@ public class ManejadorErrores {
      * Un movimiento que dejaría el stock negativo y que la validación previa no frenó (lo frena el CHECK
      * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}. Dos conteos
      * abiertos a la vez en una ubicación los frena el índice uq_conteos_stock_abierto (V7). El local central lo
-     * cuidan ambitos_central_valido y uq_ambitos_central (V8).
+     * cuidan ambitos_central_valido y uq_ambitos_central (V8), y la recepción de una entrega,
+     * detalle_entregas_recibida_no_mayor (V9).
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
@@ -62,6 +63,9 @@ public class ManejadorErrores {
         }
         if (causa != null && causa.contains("uq_conteos_stock_abierto")) {
             return respuesta(HttpStatus.CONFLICT, "Ya hay un conteo abierto en esa ubicación.", null);
+        }
+        if (causa != null && causa.contains("detalle_entregas_recibida_no_mayor")) {
+            return respuesta(HttpStatus.CONFLICT, "La cantidad recibida no puede ser mayor que la enviada.", null);
         }
         if (causa != null && causa.contains("ambitos_central_valido")) {
             return respuesta(HttpStatus.CONFLICT,

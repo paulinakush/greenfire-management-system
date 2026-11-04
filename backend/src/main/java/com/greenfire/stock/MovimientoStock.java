@@ -43,12 +43,13 @@ public class MovimientoStock extends EntidadBase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "conteo_id")
     private ConteoStock conteo;
+    private Long entregaId;
 
     protected MovimientoStock() {
     }
 
     MovimientoStock(Articulo articulo, UbicacionStock ubicacion, TipoMovimientoStock tipo, BigDecimal cantidad,
-            Long loteId, Usuario usuario, String motivo, String observaciones, ConteoStock conteo) {
+            Long loteId, Usuario usuario, String motivo, String observaciones, ConteoStock conteo, Long entregaId) {
         this.articulo = articulo;
         this.ubicacion = ubicacion;
         this.tipo = tipo;
@@ -59,6 +60,7 @@ public class MovimientoStock extends EntidadBase {
         this.motivo = motivo;
         this.observaciones = observaciones;
         this.conteo = conteo;
+        this.entregaId = entregaId;
     }
 
     public Articulo getArticulo() {
@@ -100,5 +102,9 @@ public class MovimientoStock extends EntidadBase {
     /** El conteo que generó el movimiento; null si no es de tipo conteo. */
     public ConteoStock getConteo() {
         return conteo;
+    }
+
+    public Long getEntregaId() {
+        return entregaId;
     }
 }
