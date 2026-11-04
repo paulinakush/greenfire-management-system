@@ -15,8 +15,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import com.greenfire.auditoria.AuditoriaException;
+import com.greenfire.importacion.ArchivoDemasiadoGrandeException;
+import com.greenfire.importacion.LectorCsv;
 
 @RestControllerAdvice
 public class ManejadorErrores {
@@ -41,6 +45,23 @@ public class ManejadorErrores {
     @ExceptionHandler(SolicitudInvalidaException.class)
     ResponseEntity<ApiError> solicitudInvalida(SolicitudInvalidaException e) {
         return respuesta(HttpStatus.BAD_REQUEST, e.getMessage(), null);
+    }
+
+    @ExceptionHandler(ArchivoDemasiadoGrandeException.class)
+    ResponseEntity<ApiError> archivoDemasiadoGrande(ArchivoDemasiadoGrandeException e) {
+        return respuesta(HttpStatus.PAYLOAD_TOO_LARGE, e.getMessage(), null);
+    }
+
+    /** Un archivo que supera incluso el límite de multipart de Spring (ver application.yml). */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> subidaDemasiadoGrande(MaxUploadSizeExceededException e) {
+        return respuesta(HttpStatus.PAYLOAD_TOO_LARGE,
+                "El archivo supera el máximo de " + LectorCsv.TAMANO_MAXIMO / 1024 + " KB.", null);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    ResponseEntity<ApiError> faltaArchivo(MissingServletRequestPartException e) {
+        return respuesta(HttpStatus.BAD_REQUEST, "Falta el archivo '" + e.getRequestPartName() + "'.", null);
     }
 
     @ExceptionHandler(ReglaNegocioException.class)

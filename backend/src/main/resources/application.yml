@@ -18,6 +18,11 @@ spring:
     jdbc:
       # Las tablas de sesión las crea Flyway (V1).
       initialize-schema: never
+  servlet:
+    multipart:
+      # Por encima del máximo de la importación CSV (1 MB, LectorCsv), así el error lo da ella con su mensaje.
+      max-file-size: 2MB
+      max-request-size: 2MB
   jackson:
     # Un campo que no corresponde (por ejemplo, el dueño mandando el nombre del local) es un error, no se ignora.
     deserialization:

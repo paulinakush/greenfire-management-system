@@ -17,4 +17,10 @@ public interface ArticuloRepository extends JpaRepository<Articulo, Long>, JpaSp
     boolean existsByAmbitoIdAndNombreIgnoreCase(Long ambitoId, String nombre);
 
     boolean existsByAmbitoIdAndNombreIgnoreCaseAndIdNot(Long ambitoId, String nombre, Long id);
+
+    /** Para la importación CSV: los artículos de un ámbito y los de un tipo (los productos terminados). */
+    @EntityGraph(attributePaths = "categoria")
+    List<Articulo> findByAmbitoId(Long ambitoId);
+
+    List<Articulo> findByTipo(TipoArticulo tipo);
 }

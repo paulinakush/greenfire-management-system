@@ -246,7 +246,7 @@ public class ListaPreciosService {
     }
 
     /** Los precios de una lista desactivada se consultan pero no se cambian. */
-    ListaPrecios buscarActiva(Long id, Ambito ambito) {
+    public ListaPrecios buscarActiva(Long id, Ambito ambito) {
         ListaPrecios l = buscar(id, ambito);
         if (!l.isActivo()) {
             throw new ReglaNegocioException("La lista está desactivada: sus precios no se pueden cambiar.");
@@ -267,8 +267,8 @@ public class ListaPreciosService {
         auditor.registrar(accion, ENTIDAD, lista.getId(), List.of(lista.getAmbito().getId()), detalle);
     }
 
-    /** Solo el historial: la actualización masiva audita la operación una sola vez. */
-    void guardarHistorial(Sesion sesion, ListaPrecios lista, Articulo articulo, BigDecimal anterior,
+    /** Solo el historial: la actualización masiva y la importación auditan la operación una sola vez. */
+    public void guardarHistorial(Sesion sesion, ListaPrecios lista, Articulo articulo, BigDecimal anterior,
             BigDecimal nuevo) {
         historial.save(new HistorialPrecio(lista, articulo, anterior, nuevo,
                 usuarios.getReferenceById(sesion.usuarioId())));

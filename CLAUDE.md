@@ -17,7 +17,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 ## Backend
 
 - Java 21, Spring Boot 3.4.x, Maven (usar `./mvnw`), PostgreSQL 16 y Flyway.
-- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
+- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
 - Código, tablas y endpoints en español, sin tildes ni eñes en los identificadores (`dueno_local`, `ambitos`).
 
 ### Base de datos
@@ -99,6 +99,11 @@ cd backend && ./mvnw test
 - La fábrica ve sus artículos. Cada local ve los productos terminados de la fábrica y su propia reventa, nunca la de otro local ni los insumos. Lo que el ámbito no ve responde 404; lo que ve pero no es suyo, 403 al editar.
 - El costo es por ámbito (`costos_articulo`) y cada ámbito ve solo el suyo. El costo de un producto de la fábrica en un local es el precio de la última entrega recibida; el promedio ponderado se evalúa en la etapa 4.
 - El IVA depende de la condición fiscal de la entidad del ámbito: el margen sobre el precio neto y el precio público con IVA solo se aplican si la entidad discrimina IVA. Para las demás, el precio de la lista es el precio final.
+
+## Importación desde planilla (etapa 2)
+
+- `importacion`: CSV de artículos y de precios, con vista previa (no guarda nada) y confirmación todo o nada. UTF-8, separador coma o punto y coma, decimales con coma o punto, hasta 1 MB y 2000 filas (`LectorCsv`).
+- **Textos que empiezan con `=`, `+`, `-` o `@`:** la importación no los rechaza y los guarda tal cual (un nombre como "-10 % off" es válido). **Si algún día se exportan a una planilla (CSV o Excel, etapa 5), hay que neutralizarlos**, por ejemplo anteponiendo un apóstrofo, para que la planilla no los ejecute como fórmula.
 
 ## Decisiones de entregas (etapa 2)
 
