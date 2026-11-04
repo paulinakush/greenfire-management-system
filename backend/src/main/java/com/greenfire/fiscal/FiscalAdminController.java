@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.greenfire.fiscal.dto.EntidadFiscalRequest;
+import com.greenfire.fiscal.dto.EntidadFiscalEdicionResponse;
 import com.greenfire.fiscal.dto.EntidadFiscalResponse;
 import com.greenfire.fiscal.dto.PuntoVentaEdicionRequest;
 import com.greenfire.fiscal.dto.PuntoVentaRequest;
@@ -52,7 +53,7 @@ public class FiscalAdminController {
     }
 
     @PutMapping("/entidades-fiscales/{id}")
-    public EntidadFiscalResponse editarEntidad(@PathVariable Long id, @Valid @RequestBody EntidadFiscalRequest req) {
+    public EntidadFiscalEdicionResponse editarEntidad(@PathVariable Long id, @Valid @RequestBody EntidadFiscalRequest req) {
         return entidades.editar(id, req);
     }
 

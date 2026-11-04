@@ -15,8 +15,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import com.greenfire.auditoria.AuditoriaException;
+import com.greenfire.importacion.ArchivoDemasiadoGrandeException;
+import com.greenfire.importacion.LectorCsv;
 
 @RestControllerAdvice
 public class ManejadorErrores {
@@ -38,13 +42,59 @@ public class ManejadorErrores {
         return respuesta(HttpStatus.NOT_FOUND, e.getMessage(), null);
     }
 
+    @ExceptionHandler(SolicitudInvalidaException.class)
+    ResponseEntity<ApiError> solicitudInvalida(SolicitudInvalidaException e) {
+        return respuesta(HttpStatus.BAD_REQUEST, e.getMessage(), null);
+    }
+
+    @ExceptionHandler(ArchivoDemasiadoGrandeException.class)
+    ResponseEntity<ApiError> archivoDemasiadoGrande(ArchivoDemasiadoGrandeException e) {
+        return respuesta(HttpStatus.PAYLOAD_TOO_LARGE, e.getMessage(), null);
+    }
+
+    /** Un archivo que supera incluso el límite de multipart de Spring (ver application.yml). */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> subidaDemasiadoGrande(MaxUploadSizeExceededException e) {
+        return respuesta(HttpStatus.PAYLOAD_TOO_LARGE,
+                "El archivo supera el máximo de " + LectorCsv.TAMANO_MAXIMO / 1024 + " KB.", null);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    ResponseEntity<ApiError> faltaArchivo(MissingServletRequestPartException e) {
+        return respuesta(HttpStatus.BAD_REQUEST, "Falta el archivo '" + e.getRequestPartName() + "'.", null);
+    }
+
     @ExceptionHandler(ReglaNegocioException.class)
     ResponseEntity<ApiError> reglaNegocio(ReglaNegocioException e) {
         return respuesta(HttpStatus.CONFLICT, e.getMessage(), null);
     }
 
+    /**
+     * Un movimiento que dejaría el stock negativo y que la validación previa no frenó (lo frena el CHECK
+     * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}. Dos conteos
+     * abiertos a la vez en una ubicación los frena el índice uq_conteos_stock_abierto (V7). El local central lo
+     * cuidan ambitos_central_valido y uq_ambitos_central (V8), y la recepción de una entrega,
+     * detalle_entregas_recibida_no_mayor (V9).
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
+        String causa = e.getMostSpecificCause().getMessage();
+        if (causa != null && causa.contains("stock_articulos_sin_negativo")) {
+            return respuesta(HttpStatus.CONFLICT, "Stock insuficiente.", null);
+        }
+        if (causa != null && causa.contains("uq_conteos_stock_abierto")) {
+            return respuesta(HttpStatus.CONFLICT, "Ya hay un conteo abierto en esa ubicación.", null);
+        }
+        if (causa != null && causa.contains("detalle_entregas_recibida_no_mayor")) {
+            return respuesta(HttpStatus.CONFLICT, "La cantidad recibida no puede ser mayor que la enviada.", null);
+        }
+        if (causa != null && causa.contains("ambitos_central_valido")) {
+            return respuesta(HttpStatus.CONFLICT,
+                    "El local central tiene que ser un local activo y visible en la web.", null);
+        }
+        if (causa != null && causa.contains("uq_ambitos_central")) {
+            return respuesta(HttpStatus.CONFLICT, "Ya hay otro local central.", null);
+        }
         return respuesta(HttpStatus.CONFLICT, "La operación contradice datos ya registrados.", null);
     }
 

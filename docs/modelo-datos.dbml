@@ -45,6 +45,14 @@ Enum tipo_articulo {
   reventa
 }
 
+Enum unidad_medida {
+  unidad [note: 'las bolsas de 80 dm³ se venden como unidad']
+  kg
+  litro
+  m3
+  dm3
+}
+
 Enum estado_pedido {
   pendiente
   confirmado
@@ -130,6 +138,12 @@ Enum estado_entrega {
   enviada
   recibida
   diferencia_informada
+  anulada
+}
+
+Enum resolucion_diferencia {
+  reingreso [note: 'el faltante vuelve al stock de la fábrica (movimiento devolucion)']
+  perdida [note: 'el faltante se da por perdido; no genera movimiento']
 }
 
 Enum tipo_movimiento_cc {
@@ -170,6 +184,7 @@ Enum estado_lote {
 Enum estado_conteo {
   abierto
   cerrado
+  anulado
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +214,7 @@ Table ambitos {
   email varchar
   horarios varchar
   visible_web boolean [note: 'los locales que aparecen en "Sucursales" y se pueden elegir en un pedido']
+  es_central boolean [note: 'el local que el catálogo público usa por defecto: a lo sumo uno, y tiene que ser un local activo y visible en la web. Lo cambia solo el administrador técnico']
   activo boolean
   created_at datetime
   updated_at datetime
@@ -289,64 +305,91 @@ Table auditorias {
 
 Table categorias {
   id int [pk, increment]
-  nombre varchar
+  nombre varchar [note: 'único sin distinguir mayúsculas']
   descripcion text
   activo boolean
   created_at datetime
   updated_at datetime
+  note: 'Comunes a todos los ámbitos; las administra el dueño de fábrica.'
 }
 
 Table articulos {
   id int [pk, increment]
-  tipo tipo_articulo
+  ambito_id int [note: 'dueño del artículo: la fábrica para insumos y productos terminados, un local para reventa']
+  tipo tipo_articulo [note: 'no cambia después del alta']
   nombre varchar
   descripcion text
-  categoria_id int [note: 'null para insumos']
+  categoria_id int [note: 'null para insumos y obligatoria para los demás']
   marca varchar [note: 'opcional']
-  unidad_medida varchar
-  imagen varchar
-  alicuota_iva decimal
-  costo_actual decimal [note: 'se actualiza con cada compra o cierre de lote']
-  visible_web boolean
+  unidad_medida unidad_medida
+  imagen varchar [note: 'ruta dentro de assets/productos/']
+  alicuota_iva decimal [note: '0, 10.5, 21 o 27']
+  visible_web boolean [note: 'siempre false para insumos']
   activo boolean
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, nombre) [unique, note: 'sin distinguir mayúsculas']
+  }
+  note: 'La fábrica ve sus artículos. Cada local ve los productos terminados de la fábrica y su propia reventa, nunca la de otro local.'
+}
+
+Table costos_articulo {
+  id int [pk, increment]
+  articulo_id int
+  ambito_id int
+  costo_actual decimal
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (articulo_id, ambito_id) [unique]
+  }
+  note: 'Costo de un artículo en un ámbito; cada ámbito ve solo el suyo. En la fábrica, se carga a mano hasta la etapa 4 (compras y cierre de lote). En un local: la reventa, a mano hasta la etapa 4; el producto terminado, el precio unitario de la última entrega recibida, tal cual, sin ajustes de IVA (el tratamiento del IVA lo confirma el contador en la etapa 3). El promedio ponderado se evalúa en la etapa 4.'
 }
 
 Table listas_precios {
   id int [pk, increment]
   ambito_id int [note: 'dueño de la lista: la fábrica (lista para locales) o un local']
-  nombre varchar
-  precios_con_iva boolean
-  es_predeterminada boolean [note: 'lista de venta al público del ámbito']
+  nombre varchar [note: 'único dentro del ámbito, sin distinguir mayúsculas']
+  precios_con_iva boolean [note: 'siempre true si la entidad del ámbito no discrimina IVA: el precio de la lista es el precio final. Solo se cambia mientras la lista no tiene precios']
+  es_predeterminada boolean [note: 'lista de venta al público del ámbito; una sola por ámbito y siempre activa']
   activo boolean
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, nombre) [unique, note: 'sin distinguir mayúsculas']
+    ambito_id [unique, note: 'índice parcial: solo donde es_predeterminada']
+  }
 }
 
 Table lista_precios_items {
   id int [pk, increment]
   lista_id int
-  articulo_id int
-  precio decimal
+  articulo_id int [note: 'un producto terminado de la fábrica o la reventa del ámbito de la lista; nunca un insumo']
+  precio decimal [note: 'mayor que cero; con o sin IVA según la lista']
   created_at datetime
   updated_at datetime
 
   indexes {
     (lista_id, articulo_id) [unique]
   }
+  note: 'Sacar un artículo de la lista borra su fila; el historial la conserva.'
 }
 
 Table historial_precios {
   id int [pk, increment]
   lista_id int
   articulo_id int
-  precio_anterior decimal
-  precio_nuevo decimal
+  precio_anterior decimal [note: 'null al agregar el artículo a la lista']
+  precio_nuevo decimal [note: 'null al sacar el artículo de la lista']
   usuario_id int
   fecha_hora datetime
   created_at datetime
   updated_at datetime
+  note: 'Solo inserción: la base rechaza UPDATE, DELETE y TRUNCATE.'
 }
 
 Table promociones {
@@ -370,19 +413,24 @@ Table promociones {
 Table ubicaciones_stock {
   id int [pk, increment]
   ambito_id int
-  nombre varchar
-  activo boolean
+  nombre varchar [note: 'único dentro del ámbito, sin distinguir mayúsculas']
+  activo boolean [note: 'no se desactiva mientras tenga stock']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, nombre) [unique, note: 'sin distinguir mayúsculas']
+  }
+  note: 'Cada ámbito nace con una ubicación "Principal", creada por la base al dar de alta el ámbito.'
 }
 
 Table stock_articulos {
   id int [pk, increment]
-  articulo_id int
+  articulo_id int [note: 'un artículo que el ámbito de la ubicación ve: los suyos y, en un local, los productos terminados de la fábrica']
   ubicacion_stock_id int
-  stock_minimo decimal
-  stock_maximo decimal
-  cantidad_actual decimal [note: 'caché de la suma de movimientos_stock; no se edita a mano']
+  stock_minimo decimal [note: 'opcional, no negativo']
+  stock_maximo decimal [note: 'opcional, no menor que el mínimo']
+  cantidad_actual decimal [note: 'caché de la suma de movimientos_stock, que mantiene un trigger; nunca negativa y no se edita a mano']
   created_at datetime
   updated_at datetime
 
@@ -396,19 +444,20 @@ Table movimientos_stock {
   articulo_id int
   ubicacion_stock_id int
   tipo tipo_movimiento_stock
-  cantidad decimal [note: 'positiva si entra, negativa si sale']
-  lote_id int [note: 'lote del producto terminado; en produccion_consumo, el lote que consumió el insumo']
+  cantidad decimal [note: 'positiva si entra, negativa si sale; nunca cero; entera si la unidad es unidad']
+  lote_id int [note: 'lote del producto terminado; en produccion_consumo, el lote que consumió el insumo. Sin FK hasta la etapa 4']
   usuario_id int
   fecha_hora datetime
   motivo varchar [note: 'obligatorio cuando tipo = ajuste']
-  venta_id int
-  pedido_id int
-  compra_id int
-  entrega_id int
-  conteo_id int
+  venta_id int [note: 'se agrega en la etapa 3']
+  pedido_id int [note: 'se agrega en la etapa 3']
+  compra_id int [note: 'se agrega en la etapa 4']
+  entrega_id int [note: 'obligatorio si y solo si tipo es entrega_salida, entrega_recepcion, anulacion o devolucion; salida, anulación y devolución en la ubicación de origen, recepción en la de destino']
+  conteo_id int [note: 'obligatorio si y solo si tipo = conteo; de un conteo de la misma ubicación']
   observaciones text
   created_at datetime
   updated_at datetime
+  note: 'Solo inserción: la base rechaza UPDATE, DELETE y TRUNCATE. Cada movimiento suma su cantidad a stock_articulos.cantidad_actual en la misma transacción.'
 }
 
 Table reservas_stock {
@@ -428,23 +477,34 @@ Table reservas_stock {
 Table conteos_stock {
   id int [pk, increment]
   ubicacion_stock_id int
-  usuario_id int
-  fecha date
+  usuario_id int [note: 'quien lo abrió']
+  fecha date [note: 'día de apertura, en la zona horaria de la empresa']
   estado estado_conteo
   observaciones text
+  cerrado_at datetime [note: 'solo si está cerrado']
+  anulado_at datetime [note: 'solo si está anulado']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    ubicacion_stock_id [unique, note: 'índice parcial: un solo conteo abierto por ubicación']
+  }
+  note: 'Un conteo cerrado o anulado no se modifica, y ningún conteo se borra (la base lo rechaza).'
 }
 
 Table detalle_conteo {
   id int [pk, increment]
   conteo_id int
-  articulo_id int
-  cantidad_sistema decimal
-  cantidad_contada decimal
+  articulo_id int [note: 'un artículo que el ámbito de la ubicación ve']
+  cantidad_sistema decimal [note: 'se toma al cerrar; null mientras está abierto']
+  cantidad_contada decimal [note: 'no negativa; entera si la unidad es unidad']
   created_at datetime
   updated_at datetime
-  note: 'La diferencia se calcula y genera un movimiento tipo conteo al cerrar.'
+
+  indexes {
+    (conteo_id, articulo_id) [unique]
+  }
+  note: 'Solo se carga mientras el conteo está abierto. Al cerrar, cada diferencia distinta de cero genera un movimiento tipo conteo.'
 }
 
 // ---------------------------------------------------------------------------
@@ -601,18 +661,23 @@ Table entregas {
   ambito_origen_id int
   ambito_destino_id int
   ubicacion_origen_id int
-  ubicacion_destino_id int
-  lista_precios_id int
-  estado estado_entrega
+  ubicacion_destino_id int [note: 'la elige el local al recibir; de su ámbito']
+  lista_precios_id int [note: 'lista de la fábrica de la que sale el precio']
+  estado estado_entrega [note: 'enviada pasa a recibida, diferencia_informada o anulada; ningún otro cambio']
   usuario_envio_id int
   fecha_envio datetime
   usuario_recepcion_id int
   fecha_recepcion datetime
-  remito_id int [note: 'comprobante tipo remito, con precio, del ámbito origen']
-  factura_id int [note: 'según la condición fiscal; se asocia al remito y no suma deuda']
-  nota_credito_id int [note: 'cuando la fábrica resuelve una diferencia con nota de crédito']
+  usuario_anulacion_id int
+  anulada_at datetime [note: 'solo una entrega enviada, antes de la recepción']
+  remito_id int [note: 'comprobante tipo remito, con precio, del ámbito origen; se agrega en la etapa 3']
+  factura_id int [note: 'según la condición fiscal; se asocia al remito y no suma deuda; etapa 3']
+  nota_credito_id int [note: 'cuando la fábrica resuelve una diferencia con nota de crédito; etapa 3']
+  resolucion_diferencia resolucion_diferencia [note: 'solo en diferencia_informada; una vez resuelta no cambia']
+  motivo_resolucion varchar [note: 'obligatorio al resolver']
+  usuario_resolucion_id int
   diferencia_resuelta_at datetime
-  total decimal
+  total decimal [note: 'suma de los subtotales de lo enviado']
   observaciones text
   observaciones_recepcion text [note: 'diferencias informadas por el destino']
   created_at datetime
@@ -625,12 +690,17 @@ Table detalle_entregas {
   entrega_id int
   articulo_id int
   lote_id int
-  cantidad_enviada decimal
-  cantidad_recibida decimal [note: 'la carga el destino al confirmar la recepción']
-  precio_unitario decimal
-  subtotal decimal
+  cantidad_enviada decimal [note: 'mayor que cero']
+  cantidad_recibida decimal [note: 'la carga el destino al confirmar la recepción, una sola vez; nunca mayor que la enviada']
+  precio_unitario decimal [note: 'el de la lista de la fábrica al enviar']
+  subtotal decimal [note: 'cantidad_enviada × precio_unitario, redondeado a dos decimales']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (entrega_id, articulo_id, lote_id) [unique, note: 'un renglón por artículo y lote']
+  }
+  note: 'Solo productos terminados del ámbito origen. No se borra.'
 }
 
 // ---------------------------------------------------------------------------
@@ -887,7 +957,10 @@ Ref: auditorias.usuario_id > usuarios.id
 Ref: auditorias.ambito_id > ambitos.id
 Ref: auditorias.ambito_afectado_id > ambitos.id
 
+Ref: articulos.ambito_id > ambitos.id
 Ref: articulos.categoria_id > categorias.id
+Ref: costos_articulo.articulo_id > articulos.id
+Ref: costos_articulo.ambito_id > ambitos.id
 Ref: listas_precios.ambito_id > ambitos.id
 Ref: lista_precios_items.lista_id > listas_precios.id
 Ref: lista_precios_items.articulo_id > articulos.id
@@ -953,6 +1026,8 @@ Ref: entregas.ubicacion_destino_id > ubicaciones_stock.id
 Ref: entregas.lista_precios_id > listas_precios.id
 Ref: entregas.usuario_envio_id > usuarios.id
 Ref: entregas.usuario_recepcion_id > usuarios.id
+Ref: entregas.usuario_anulacion_id > usuarios.id
+Ref: entregas.usuario_resolucion_id > usuarios.id
 Ref: entregas.remito_id > comprobantes.id
 Ref: entregas.factura_id > comprobantes.id
 Ref: entregas.nota_credito_id > comprobantes.id

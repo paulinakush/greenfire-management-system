@@ -4,12 +4,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
@@ -21,11 +23,25 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import com.greenfire.ambitos.Ambito;
 import com.greenfire.ambitos.AmbitoRepository;
 import com.greenfire.ambitos.TipoAmbito;
+import com.greenfire.catalogo.Articulo;
+import com.greenfire.catalogo.ArticuloRepository;
+import com.greenfire.catalogo.Categoria;
+import com.greenfire.catalogo.CategoriaRepository;
+import com.greenfire.catalogo.CostoArticulo;
+import com.greenfire.catalogo.CostoArticuloRepository;
+import com.greenfire.catalogo.TipoArticulo;
+import com.greenfire.catalogo.UnidadMedida;
 import com.greenfire.fiscal.CondicionIva;
 import com.greenfire.fiscal.EntidadFiscal;
 import com.greenfire.fiscal.EntidadFiscalRepository;
+import com.greenfire.precios.ListaPrecios;
+import com.greenfire.precios.ListaPreciosItem;
+import com.greenfire.precios.ListaPreciosItemRepository;
+import com.greenfire.precios.ListaPreciosRepository;
 import com.greenfire.seguridad.Perfil;
 import com.greenfire.seguridad.Sesion;
+import com.greenfire.stock.UbicacionStock;
+import com.greenfire.stock.UbicacionStockRepository;
 import com.greenfire.usuarios.Usuario;
 import com.greenfire.usuarios.UsuarioAmbito;
 import com.greenfire.usuarios.UsuarioAmbitoRepository;
@@ -48,14 +64,31 @@ public class Datos {
     private final UsuarioRepository usuarios;
     private final UsuarioAmbitoRepository perfiles;
     private final FindByIndexNameSessionRepository<? extends Session> sesiones;
+    private final CategoriaRepository categorias;
+    private final ArticuloRepository articulos;
+    private final CostoArticuloRepository costos;
+    private final ListaPreciosRepository listas;
+    private final ListaPreciosItemRepository precios;
+    private final UbicacionStockRepository ubicaciones;
+    private final JdbcTemplate jdbc;
 
     public Datos(EntidadFiscalRepository entidades, AmbitoRepository ambitos, UsuarioRepository usuarios,
-            UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones) {
+            UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones,
+            CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos,
+            ListaPreciosRepository listas, ListaPreciosItemRepository precios, UbicacionStockRepository ubicaciones,
+            JdbcTemplate jdbc) {
         this.entidades = entidades;
         this.ambitos = ambitos;
         this.usuarios = usuarios;
         this.perfiles = perfiles;
         this.sesiones = sesiones;
+        this.categorias = categorias;
+        this.articulos = articulos;
+        this.costos = costos;
+        this.listas = listas;
+        this.precios = precios;
+        this.ubicaciones = ubicaciones;
+        this.jdbc = jdbc;
     }
 
     // --- Entidades fiscales y ámbitos ---
@@ -101,6 +134,80 @@ public class Datos {
 
     public Ambito fabrica() {
         return ambito(TipoAmbito.fabrica, "Fábrica", CondicionIva.responsable_inscripto);
+    }
+
+    // --- Catálogo ---
+
+    public Categoria categoria(String nombre) {
+        Categoria c = new Categoria();
+        c.setNombre(nombre + " " + SECUENCIA.incrementAndGet());
+        return categorias.save(c);
+    }
+
+    /** Artículo activo del ámbito; los insumos van sin categoría. */
+    public Articulo articulo(Ambito ambito, TipoArticulo tipo, String nombre, Categoria categoria) {
+        Articulo a = new Articulo();
+        a.setAmbito(ambito);
+        a.setTipo(tipo);
+        a.setNombre(nombre);
+        a.setCategoria(tipo == TipoArticulo.insumo ? null : categoria);
+        a.setUnidadMedida(UnidadMedida.unidad);
+        a.setAlicuotaIva(new BigDecimal("21"));
+        return articulos.save(a);
+    }
+
+    public CostoArticulo costo(Articulo articulo, Ambito ambito, String costo) {
+        CostoArticulo c = new CostoArticulo(articulo, ambito);
+        c.setCostoActual(new BigDecimal(costo));
+        return costos.save(c);
+    }
+
+    // --- Precios ---
+
+    public ListaPrecios lista(Ambito ambito, String nombre, boolean preciosConIva, boolean predeterminada) {
+        ListaPrecios l = new ListaPrecios();
+        l.setAmbito(ambito);
+        l.setNombre(nombre);
+        l.setPreciosConIva(preciosConIva);
+        l.setEsPredeterminada(predeterminada);
+        return listas.save(l);
+    }
+
+    public ListaPreciosItem precio(ListaPrecios lista, Articulo articulo, String precio) {
+        ListaPreciosItem i = new ListaPreciosItem(lista, articulo);
+        i.setPrecio(new BigDecimal(precio).setScale(2)); // como lo devuelve la base
+        return precios.save(i);
+    }
+
+    // --- Stock ---
+
+    /** La ubicación "Principal" que la base crea con cada ámbito. */
+    public UbicacionStock principal(Ambito ambito) {
+        return ubicaciones.findByAmbitoIdOrderByNombre(ambito.getId()).stream()
+                .filter(u -> u.getNombre().equals("Principal")).findFirst().orElseThrow();
+    }
+
+    public UbicacionStock ubicacion(Ambito ambito, String nombre) {
+        UbicacionStock u = new UbicacionStock();
+        u.setAmbito(ambito);
+        u.setNombre(nombre);
+        return ubicaciones.save(u);
+    }
+
+    /** Carga stock con un movimiento de ajuste insertado directamente en la base (el trigger suma la cantidad). */
+    public void stock(Articulo articulo, UbicacionStock ubicacion, String cantidad) {
+        ubicaciones.flush();
+        jdbc.update("""
+                insert into movimientos_stock (articulo_id, ubicacion_stock_id, tipo, cantidad, usuario_id, motivo)
+                values (?, ?, 'ajuste', ?::numeric, ?, 'Carga de prueba')
+                """, articulo.getId(), ubicacion.getId(), cantidad, usuario("Carga").getId());
+    }
+
+    /** Cantidad actual leída de la base. */
+    public BigDecimal cantidad(Articulo articulo, UbicacionStock ubicacion) {
+        return jdbc.query("select cantidad_actual from stock_articulos where articulo_id = ? and ubicacion_stock_id = ?",
+                rs -> rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO.setScale(3), articulo.getId(),
+                ubicacion.getId());
     }
 
     // --- Usuarios ---

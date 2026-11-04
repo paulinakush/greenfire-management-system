@@ -183,6 +183,7 @@ class AmbitoApiTest {
 
         Map<String, Object> local = new ObjectMapper().readValue(json, List.class).get(0) instanceof Map<?, ?> m
                 ? (Map<String, Object>) m : Map.of();
-        assertThat(local.keySet()).containsExactlyInAnyOrder("nombre", "direccion", "horarios", "telefono", "email");
+        assertThat(local.keySet()).containsExactlyInAnyOrder("id", "nombre", "direccion", "horarios", "telefono",
+                "email", "esCentral");
     }
 }
