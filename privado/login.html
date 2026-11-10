@@ -20,7 +20,6 @@
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-<script src="shared/db.js"></script>
 <script src="shared/auth.js"></script>
 
 <script id="app-source" type="text/plain">
@@ -934,43 +933,287 @@ const DataTable = ({ columns, rows, getRowId, actionsRenderer, searchPlaceholder
 
 const { useState, useEffect } = React;
 
-const DEMO_USERS = [
-  { email: "empleado@greenfire.com", password: "empleado123", label: "Empleado de sucursal" },
-  { email: "responsable@greenfire.com", password: "responsable123", label: "Responsable de sucursal" },
-  { email: "fabrica@greenfire.com", password: "fabrica123", label: "Administrativo de fábrica" },
-];
+const MENSAJES_POR_MOTIVO = {
+  vencida: { tipo: "aviso", texto: "Tu sesión venció por inactividad. Ingresá de nuevo." },
+  salida: { tipo: "ok", texto: "Cerraste la sesión." },
+};
 
-const LoginApp = () => {
+const Aviso = ({ tipo, children }) => {
+  const estilos = {
+    error: "text-red-700 bg-red-50 border-red-100",
+    aviso: "text-amber-800 bg-amber-50 border-amber-100",
+    ok: "text-medium bg-institutional/10 border-institutional/20",
+  };
+  return (
+    <div role={tipo === "error" ? "alert" : "status"} className={`text-sm border rounded-xl px-3.5 py-2.5 ${estilos[tipo]}`}>
+      {children}
+    </div>
+  );
+};
+
+/** Mensaje claro para cada respuesta de la API. El login fallido trae siempre el mismo texto del servidor. */
+const mensajeDeError = (r, porDefecto) => {
+  if (r.status === 0) return r.data.mensaje;
+  if (r.status === 400 && r.data && r.data.campos) return Object.values(r.data.campos).join(" ");
+  return (r.data && r.data.mensaje) || porDefecto;
+};
+
+const LinkBoton = ({ onClick, children }) => (
+  <button type="button" onClick={onClick} className="text-sm font-semibold text-medium hover:text-institutional">
+    {children}
+  </button>
+);
+
+const FormIngreso = ({ aviso, onSesion, onOlvide }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [cargando, setCargando] = useState(false);
 
-  useEffect(() => {
-    const session = GFAuth.getSession();
-    if (session) window.location.href = GFAuth.rutaPorRol(session.rolNombre);
-  }, []);
-
-  const handleSubmit = (e) => {
+  const enviar = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
-    setTimeout(() => {
-      const result = GFAuth.login(email, password);
-      if (!result.ok) {
-        setError(result.error);
-        setLoading(false);
-        return;
-      }
-      window.location.href = GFAuth.rutaPorRol(result.session.rolNombre);
-    }, 200);
+    setCargando(true);
+    const r = await GFAuth.login(email.trim(), password);
+    setCargando(false);
+    if (!r.ok) {
+      setError(mensajeDeError(r, "No se pudo iniciar sesión."));
+      setPassword("");
+      return;
+    }
+    onSesion(r.data);
   };
 
-  const fillDemo = (u) => {
-    setEmail(u.email);
-    setPassword(u.password);
+  return (
+    <form onSubmit={enviar} className="space-y-4" noValidate>
+      {aviso && <Aviso tipo={aviso.tipo}>{aviso.texto}</Aviso>}
+      <Field label="Email">
+        <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)}
+          className={inputClass} placeholder="nombre@greenfire.com" autoFocus />
+      </Field>
+      <Field label="Contraseña">
+        <input type="password" required autoComplete="current-password" value={password}
+          onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="••••••••" />
+      </Field>
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      <Button type="submit" disabled={cargando || !email.trim() || !password} className="w-full">
+        {cargando ? "Ingresando…" : "Ingresar"}
+      </Button>
+      <div className="text-center">
+        <LinkBoton onClick={onOlvide}>Olvidé mi contraseña</LinkBoton>
+      </div>
+    </form>
+  );
+};
+
+const ElegirAmbito = ({ sesion, onElegido, onSalir }) => {
+  const [error, setError] = useState("");
+  const [eligiendo, setEligiendo] = useState(null);
+
+  const elegir = async (p) => {
     setError("");
+    setEligiendo(p.ambitoId);
+    const r = await GFAuth.elegirAmbito(p.ambitoId);
+    setEligiendo(null);
+    if (r.status === 401) {
+      window.location.replace("login.html?motivo=vencida");
+      return;
+    }
+    if (!r.ok) {
+      setError(mensajeDeError(r, "No se pudo entrar a ese ámbito."));
+      return;
+    }
+    onElegido(r.data);
   };
+
+  const actual = sesion.ambitoActivo && sesion.ambitoActivo.ambitoId;
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="font-semibold">Hola, {sesion.usuario.nombre}</p>
+        <p className="text-sm text-deep/60">Tenés un perfil en más de un ámbito. ¿Con cuál querés entrar?</p>
+      </div>
+      <div className="space-y-2">
+        {sesion.perfiles.map((p) => (
+          <button key={p.ambitoId} type="button" onClick={() => elegir(p)} disabled={eligiendo !== null}
+            className="w-full text-left rounded-xl border border-deep/10 hover:border-institutional hover:bg-institutional/5 px-4 py-3 transition-colors disabled:opacity-60">
+            <span className="block font-semibold">
+              {p.ambitoNombre}
+              {p.ambitoId === actual && <span className="ml-2 text-xs font-medium text-medium">(actual)</span>}
+            </span>
+            <span className="block text-sm text-deep/60">
+              {GFAuth.TIPOS_AMBITO[p.ambitoTipo]} · {GFAuth.PERFILES[p.perfil] || p.perfil}
+              {eligiendo === p.ambitoId && " · entrando…"}
+            </span>
+          </button>
+        ))}
+      </div>
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      <div className="text-center">
+        <LinkBoton onClick={onSalir}>Cerrar sesión</LinkBoton>
+      </div>
+    </div>
+  );
+};
+
+const Recuperar = ({ onVolver }) => {
+  const [email, setEmail] = useState("");
+  const [enviado, setEnviado] = useState(false);
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const enviar = async (e) => {
+    e.preventDefault();
+    setError("");
+    setCargando(true);
+    const r = await GFAuth.recuperar(email.trim());
+    setCargando(false);
+    if (!r.ok) {
+      setError(mensajeDeError(r, "No se pudo registrar el pedido."));
+      return;
+    }
+    setEnviado(true);
+  };
+
+  if (enviado) {
+    return (
+      <div className="space-y-4">
+        <Aviso tipo="ok">
+          Pedido registrado. Si el email corresponde a una cuenta activa, se generó un link para restablecer la
+          contraseña, que vence en una hora.
+        </Aviso>
+        <p className="text-sm text-deep/60">
+          Por ahora el sistema no envía emails: pedile el link o una contraseña nueva al administrador técnico.
+        </p>
+        <div className="text-center">
+          <LinkBoton onClick={onVolver}>Volver al ingreso</LinkBoton>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form onSubmit={enviar} className="space-y-4" noValidate>
+      <div>
+        <p className="font-semibold">Olvidé mi contraseña</p>
+        <p className="text-sm text-deep/60">Ingresá tu email y te generamos un link para elegir una contraseña nueva.</p>
+      </div>
+      <Field label="Email">
+        <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)}
+          className={inputClass} placeholder="nombre@greenfire.com" autoFocus />
+      </Field>
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      <Button type="submit" disabled={cargando || !email.trim()} className="w-full">
+        {cargando ? "Enviando…" : "Pedir el link"}
+      </Button>
+      <div className="text-center">
+        <LinkBoton onClick={onVolver}>Volver al ingreso</LinkBoton>
+      </div>
+    </form>
+  );
+};
+
+const Restablecer = ({ token, onListo }) => {
+  const [password, setPassword] = useState("");
+  const [repetida, setRepetida] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+
+  const enviar = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (password.length < 10) {
+      setError("La contraseña debe tener al menos 10 caracteres.");
+      return;
+    }
+    if (password !== repetida) {
+      setError("Las dos contraseñas no coinciden.");
+      return;
+    }
+    setCargando(true);
+    const r = await GFAuth.restablecer(token, password);
+    setCargando(false);
+    if (!r.ok) {
+      setError(mensajeDeError(r, "No se pudo cambiar la contraseña."));
+      return;
+    }
+    onListo();
+  };
+
+  return (
+    <form onSubmit={enviar} className="space-y-4" noValidate>
+      <div>
+        <p className="font-semibold">Elegí una contraseña nueva</p>
+        <p className="text-sm text-deep/60">Al menos 10 caracteres. Se cierran las sesiones abiertas de tu cuenta.</p>
+      </div>
+      <Field label="Contraseña nueva">
+        <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)}
+          className={inputClass} autoFocus />
+      </Field>
+      <Field label="Repetila">
+        <input type="password" autoComplete="new-password" value={repetida} onChange={(e) => setRepetida(e.target.value)}
+          className={inputClass} />
+      </Field>
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      <Button type="submit" disabled={cargando} className="w-full">
+        {cargando ? "Guardando…" : "Guardar la contraseña"}
+      </Button>
+    </form>
+  );
+};
+
+/**
+ * Pantallas: ingresar, elegir ámbito (si el usuario tiene más de un perfil, o desde "Cambiar de ámbito"),
+ * olvidé mi contraseña y elegir una nueva (con el token del link de recuperación).
+ */
+const LoginApp = () => {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  const [pantalla, setPantalla] = useState(token ? "restablecer" : "cargando");
+  const [sesion, setSesion] = useState(null);
+  const [aviso, setAviso] = useState(MENSAJES_POR_MOTIVO[params.get("motivo")] || null);
+
+  const entrar = (s) => {
+    if (!s.usuario.adminTecnico && !s.ambitoActivo) {
+      setSesion(s);
+      setPantalla("elegir");
+      return;
+    }
+    window.location.replace(GFAuth.destino(s));
+  };
+
+  // Con una sesión abierta no se muestra el formulario: se entra, o se elige el ámbito si lo pidió.
+  useEffect(() => {
+    if (token) return;
+    GFAuth.me().then((r) => {
+      if (r.ok && params.get("elegir") && !r.data.usuario.adminTecnico && r.data.perfiles.length > 1) {
+        setSesion(r.data);
+        setPantalla("elegir");
+      } else if (r.ok) {
+        entrar(r.data);
+      } else {
+        if (r.status === 0) setAviso({ tipo: "error", texto: r.data.mensaje });
+        setPantalla("ingreso");
+      }
+    });
+  }, []);
+
+  const volverAlIngreso = (nuevoAviso) => {
+    setAviso(nuevoAviso || null);
+    window.history.replaceState(null, "", "login.html");
+    setPantalla("ingreso");
+  };
+
+  let contenido;
+  if (pantalla === "cargando") contenido = <p className="text-sm text-deep/50 text-center">Cargando…</p>;
+  else if (pantalla === "elegir")
+    contenido = <ElegirAmbito sesion={sesion} onElegido={(s) => window.location.replace(GFAuth.destino(s))} onSalir={GFAuth.logout} />;
+  else if (pantalla === "recuperar") contenido = <Recuperar onVolver={() => volverAlIngreso()} />;
+  else if (pantalla === "restablecer")
+    contenido = (
+      <Restablecer token={token}
+        onListo={() => volverAlIngreso({ tipo: "ok", texto: "Listo: ya podés ingresar con tu contraseña nueva." })} />
+    );
+  else contenido = <FormIngreso aviso={aviso} onSesion={entrar} onOlvide={() => { setAviso(null); setPantalla("recuperar"); }} />;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-5 py-12 bg-gradient-to-br from-deep via-deep to-medium">
@@ -978,60 +1221,9 @@ const LoginApp = () => {
         <div className="flex flex-col items-center mb-8">
           <img src="../assets/logos/logo-blanco-v2.png" alt="Green Fire" className="h-12 w-auto mb-4" />
           <h1 className="font-display font-bold text-xl text-white">Acceso interno</h1>
-          <p className="text-sm text-white/60 mt-1">Sucursales y Fábrica</p>
+          <p className="text-sm text-white/60 mt-1">Fábrica y locales</p>
         </div>
-
-        <div className="bg-white rounded-2xl shadow-xl p-7 md:p-8">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Field label="Email">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-                placeholder="nombre@greenfire.com"
-                autoFocus
-              />
-            </Field>
-            <Field label="Contraseña">
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-                placeholder="••••••••"
-              />
-            </Field>
-
-            {error && (
-              <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl px-3.5 py-2.5">{error}</div>
-            )}
-
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Ingresando…" : "Ingresar"}
-            </Button>
-          </form>
-        </div>
-
-        <div className="mt-6 bg-white/10 rounded-2xl p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/50 mb-2">
-            Prototipo — usuarios de ejemplo
-          </p>
-          <div className="space-y-1.5">
-            {DEMO_USERS.map((u) => (
-              <button
-                key={u.email}
-                onClick={() => fillDemo(u)}
-                className="w-full flex items-center justify-between text-left text-xs text-white/80 hover:text-white bg-white/0 hover:bg-white/10 rounded-lg px-2.5 py-1.5 transition-colors"
-              >
-                <span>{u.label}</span>
-                <span className="text-white/40">{u.email}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+        <div className="bg-white rounded-2xl shadow-xl p-7 md:p-8">{contenido}</div>
       </div>
     </div>
   );
