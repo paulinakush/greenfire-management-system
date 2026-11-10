@@ -94,7 +94,7 @@ class AuditoriaRegistroTest {
         Ambito centro = datos.local("Centro");
         // Alta de empleado y restablecimiento de contraseña.
         mvc.perform(json(post("/api/usuarios"), datos.en(centro, Perfil.dueno_local), """
-                {"nombre": "Pedro", "email": "pedro@greenfire.test", "password": "clave-de-pedro-1"}
+                {"nombre": "Pedro", "usuario": "pedro", "email": "pedro@greenfire.test", "password": "clave-de-pedro-1"}
                 """)).andExpect(status().isCreated());
         Usuario lucia = datos.usuario("Lucia");
         datos.perfil(lucia, centro, Perfil.dueno_local);

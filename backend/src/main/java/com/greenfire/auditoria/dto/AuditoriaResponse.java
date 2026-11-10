@@ -10,6 +10,7 @@ public record AuditoriaResponse(
         Long id,
         OffsetDateTime fechaHora,
         Long usuarioId,
+        String usuario,
         String usuarioNombre,
         Perfil perfil,
         Long ambitoId,
@@ -26,6 +27,7 @@ public record AuditoriaResponse(
     public static AuditoriaResponse de(Auditoria a) {
         return new AuditoriaResponse(a.getId(), a.getFechaHora(),
                 a.getUsuario() == null ? null : a.getUsuario().getId(),
+                a.getUsuario() == null ? null : a.getUsuario().getUsuario(),
                 a.getUsuario() == null ? null : a.getUsuario().getNombre(),
                 a.getPerfil(),
                 a.getAmbito() == null ? null : a.getAmbito().getId(),

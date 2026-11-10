@@ -10,7 +10,7 @@ import com.greenfire.seguridad.Perfil;
  *
  * @param ambitosAfectados ámbitos que toca la operación; se guarda un registro por cada uno
  * @param detalle datos de la operación; en una edición, cada campo con su valor anterior y el nuevo
- * @param emailIntentado email usado en un login fallido, aunque no corresponda a ningún usuario
+ * @param emailIntentado usuario o email escrito en un login fallido, aunque no corresponda a ningún usuario
  */
 public record EventoAuditoria(
         String accion,

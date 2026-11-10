@@ -253,7 +253,8 @@ Table punto_venta_comprobantes {
 Table usuarios {
   id int [pk, increment]
   nombre varchar
-  email varchar [unique]
+  usuario varchar [note: 'para el login, junto con el email: único sin distinguir mayúsculas, de 3 a 30 letras minúsculas, números, punto o guion bajo']
+  email varchar [unique, note: 'para el login y la recuperación de contraseña']
   password_hash varchar
   es_admin_tecnico boolean [note: 'crea las cuentas de los dueños; no ve datos comerciales de ningún ámbito']
   activo boolean
@@ -292,7 +293,7 @@ Table auditorias {
   entidad_id int
   detalle text
   fecha_hora datetime
-  email_intentado varchar [note: 'login fallido con un email que no corresponde a ningún usuario']
+  email_intentado varchar [note: 'login fallido: lo que se escribió en el campo (usuario o email), corresponda o no a un usuario']
   ip varchar
   created_at datetime
   updated_at datetime

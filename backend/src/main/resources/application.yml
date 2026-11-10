@@ -52,6 +52,7 @@ greenfire:
     log-enlace: ${RECUPERACION_LOG_ENLACE:false}
   admin-inicial:
     nombre: ${ADMIN_NOMBRE:}
+    usuario: ${ADMIN_USUARIO:}
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
   front:

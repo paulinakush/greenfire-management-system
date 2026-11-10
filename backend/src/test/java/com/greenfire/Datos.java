@@ -212,11 +212,12 @@ public class Datos {
 
     // --- Usuarios ---
 
-    /** Usuario con la contraseña {@link #PASSWORD} y un email único. */
+    /** Usuario con la contraseña {@link #PASSWORD}, y usuario y email únicos (el email es el usuario + @greenfire.test). */
     public Usuario usuario(String nombre) {
         Usuario u = new Usuario();
         u.setNombre(nombre);
-        u.setEmail(nombre.toLowerCase().replaceAll("[^a-z]", "") + SECUENCIA.incrementAndGet() + "@greenfire.test");
+        u.setUsuario(nombre.toLowerCase().replaceAll("[^a-z]", "") + SECUENCIA.incrementAndGet());
+        u.setEmail(u.getUsuario() + "@greenfire.test");
         u.setPasswordHash(PASSWORD_HASH);
         return usuarios.save(u);
     }
@@ -267,10 +268,10 @@ public class Datos {
         return s.getId();
     }
 
-    /** Login real por la API; devuelve la cookie de sesión. */
-    public static Cookie login(MockMvc mvc, String email, String password) throws Exception {
+    /** Login real por la API, con el usuario o el email; devuelve la cookie de sesión. */
+    public static Cookie login(MockMvc mvc, String usuario, String password) throws Exception {
         return mvc.perform(post("/api/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\": \"%s\", \"password\": \"%s\"}".formatted(email, password)))
+                        .content("{\"usuario\": \"%s\", \"password\": \"%s\"}".formatted(usuario, password)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getCookie("SESSION");
     }

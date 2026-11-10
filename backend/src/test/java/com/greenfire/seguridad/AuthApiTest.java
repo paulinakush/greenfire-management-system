@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -95,7 +96,7 @@ class AuthApiTest {
         assertThat(fallidos.get(0).usuarioId()).isNull();
         assertThat(fallidos.get(0).emailIntentado()).isEqualTo("nadie@greenfire.test");
         assertThat(fallidos.get(0).ip()).isEqualTo("127.0.0.1");
-        assertThat(fallidos.get(0).detalle().get("motivo")).isEqualTo("email_inexistente");
+        assertThat(fallidos.get(0).detalle().get("motivo")).isEqualTo("usuario_inexistente");
         assertThat(fallidos.get(1).usuarioId()).isEqualTo(ana.getId());
         assertThat(fallidos.get(1).emailIntentado()).isEqualTo(ana.getEmail());
         assertThat(fallidos.get(1).detalle().get("motivo")).isEqualTo("password_incorrecta");
@@ -209,9 +210,104 @@ class AuthApiTest {
         restablecer("token-vencido", "nueva-clave-segura").andExpect(status().isConflict());
     }
 
-    private ResultActions intentarLogin(String email, String password) throws Exception {
+    // --- Login con usuario o email ---
+
+    @Test
+    void entraConElUsuarioOConElEmailSinDistinguirMayusculas() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+        datos.perfil(ana, datos.local("Centro"), Perfil.dueno_local);
+
+        for (String ingresado : List.of(ana.getUsuario(), ana.getEmail(), ana.getUsuario().toUpperCase(),
+                ana.getEmail().toUpperCase(), "  " + ana.getUsuario() + " ")) {
+            intentarLogin(ingresado, Datos.PASSWORD)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.usuario.id").value(ana.getId().intValue()));
+        }
+    }
+
+    @Test
+    void laSesionIncluyeElUsuario() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+        datos.perfil(ana, datos.local("Centro"), Perfil.dueno_local);
+
+        intentarLogin(ana.getUsuario(), Datos.PASSWORD)
+                .andExpect(jsonPath("$.usuario.usuario").value(ana.getUsuario()))
+                .andExpect(jsonPath("$.usuario.email").value(ana.getEmail()));
+        Cookie sesion = login(mvc, ana.getUsuario(), Datos.PASSWORD);
+        mvc.perform(get("/api/auth/me").with(con(sesion)))
+                .andExpect(jsonPath("$.usuario.usuario").value(ana.getUsuario()));
+    }
+
+    @Test
+    void todaviaAceptaElCampoEmailEnElPedido() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+        datos.perfil(ana, datos.local("Centro"), Perfil.dueno_local);
+
+        mvc.perform(post("/api/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\": \"%s\", \"password\": \"%s\"}"
+                                .formatted(ana.getUsuario(), Datos.PASSWORD)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void elMensajeEsElMismoParaCualquierFallo() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+        datos.perfil(ana, datos.local("Centro"), Perfil.dueno_local);
+        Usuario bloqueada = datos.usuario("Bloqueada");
+        datos.perfil(bloqueada, datos.local("Norte"), Perfil.dueno_local);
+        bloqueada.setBloqueadoHasta(OffsetDateTime.now().plusMinutes(10));
+        Usuario inactiva = datos.usuario("Inactiva");
+        datos.perfil(inactiva, datos.local("Sur"), Perfil.dueno_local);
+        inactiva.setActivo(false);
+
+        List<String> respuestas = new ArrayList<>();
+        for (String[] intento : new String[][] {
+                {"nadie", Datos.PASSWORD},
+                {"nadie@greenfire.test", Datos.PASSWORD},
+                {ana.getUsuario(), "otra-clave-incorrecta"},
+                {ana.getEmail(), "otra-clave-incorrecta"},
+                {bloqueada.getUsuario(), Datos.PASSWORD},
+                {inactiva.getUsuario(), Datos.PASSWORD}}) {
+            respuestas.add(intentarLogin(intento[0], intento[1])
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.mensaje").value(LoginService.LOGIN_FALLIDO))
+                    .andReturn().getResponse().getContentAsString());
+        }
+        assertThat(respuestas).containsOnly(respuestas.get(0));
+    }
+
+    @Test
+    void losIntentosFallidosGuardanLoQueSeEscribioEnElCampo() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+
+        intentarLogin("Nadie.Que.Exista", "cualquier-clave");
+        intentarLogin(ana.getUsuario().toUpperCase(), "otra-clave-incorrecta");
+
+        List<EventoAuditoria> fallidos = eventos.stream(EventoAuditoria.class)
+                .filter(e -> e.accion().equals("login_fallido")).toList();
+        assertThat(fallidos).extracting(EventoAuditoria::emailIntentado)
+                .containsExactly("Nadie.Que.Exista", ana.getUsuario().toUpperCase());
+        assertThat(fallidos).extracting(EventoAuditoria::usuarioId).containsExactly(null, ana.getId());
+    }
+
+    @Test
+    void elBloqueoCuentaLosIntentosConUsuarioYConEmailJuntos() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+        datos.perfil(ana, datos.local("Centro"), Perfil.dueno_local);
+
+        for (int i = 0; i < 5; i++) {
+            intentarLogin(i % 2 == 0 ? ana.getUsuario() : ana.getEmail(), "otra-clave-incorrecta")
+                    .andExpect(status().isUnauthorized());
+        }
+        assertThat(ana.getBloqueadoHasta()).isAfter(OffsetDateTime.now().plusMinutes(14));
+
+        intentarLogin(ana.getUsuario(), Datos.PASSWORD).andExpect(status().isUnauthorized());
+        intentarLogin(ana.getEmail(), Datos.PASSWORD).andExpect(status().isUnauthorized());
+    }
+
+    private ResultActions intentarLogin(String usuario, String password) throws Exception {
         return mvc.perform(post("/api/auth/login").with(csrf()).contentType(MediaType.APPLICATION_JSON)
-                .content(credenciales(email, password)));
+                .content(credenciales(usuario, password)));
     }
 
     private ResultActions elegir(Cookie sesion, Ambito ambito) throws Exception {
@@ -224,7 +320,7 @@ class AuthApiTest {
                 .content("{\"token\": \"%s\", \"password\": \"%s\"}".formatted(token, password)));
     }
 
-    private static String credenciales(String email, String password) {
-        return "{\"email\": \"%s\", \"password\": \"%s\"}".formatted(email, password);
+    private static String credenciales(String usuario, String password) {
+        return "{\"usuario\": \"%s\", \"password\": \"%s\"}".formatted(usuario, password);
     }
 }

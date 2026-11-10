@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -140,6 +142,49 @@ class UsuarioApiTest {
     }
 
     @Test
+    void elUsuarioSoloAdmiteMinusculasNumerosPuntoYGuionBajoDe3A30Caracteres() throws Exception {
+        RequestPostProcessor dueno = datos.en(datos.local("Centro"), Perfil.dueno_local);
+
+        for (String invalido : List.of("Pedro", "pedro@greenfire.test", "pedro perez", "pedro-perez", "pedrí", "pe",
+                "p".repeat(31), "")) {
+            mvc.perform(json(post("/api/usuarios"), dueno,
+                            empleado("Pedro", invalido, "pedro@greenfire.test", "clave-de-pedro-1")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.campos", hasKey("usuario")));
+        }
+        mvc.perform(json(post("/api/usuarios"), dueno,
+                        empleado("Pedro", "pedro.perez_2", "pedro@greenfire.test", "clave-de-pedro-1")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.usuario").value("pedro.perez_2"));
+    }
+
+    @Test
+    void elUsuarioNoSePuedeRepetir() throws Exception {
+        Usuario ana = datos.usuario("Ana");
+
+        mvc.perform(json(post("/api/usuarios"), datos.en(datos.local("Centro"), Perfil.dueno_local),
+                        empleado("Otra", ana.getUsuario(), "otra@greenfire.test", "clave-de-prueba-2")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("Ya existe un usuario con ese nombre de usuario."));
+        mvc.perform(json(post("/api/admin/usuarios"), datos.admin(), """
+                        {"nombre": "Otra", "usuario": "%s", "email": "otra@greenfire.test",
+                         "password": "clave-inicial-1", "ambitoId": %d, "perfil": "dueno_local"}
+                        """.formatted(ana.getUsuario(), datos.local("Norte").getId())))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void elAltaQuedaEnAuditoriaConElUsuario() throws Exception {
+        mvc.perform(json(post("/api/usuarios"), datos.en(datos.local("Centro"), Perfil.dueno_local),
+                        empleado("Pedro", "pedro", "pedro@greenfire.test", "clave-de-pedro-1")))
+                .andExpect(status().isCreated());
+
+        assertThat(eventos.stream(EventoAuditoria.class).filter(e -> e.accion().equals("crear")))
+                .singleElement()
+                .satisfies(e -> assertThat(e.detalle().get("usuario")).isEqualTo("pedro"));
+    }
+
+    @Test
     void elDuenoDeLocalVeSoloLosUsuariosDeSuLocal() throws Exception {
         Ambito centro = datos.local("Centro");
         Ambito norte = datos.local("Norte");
@@ -177,13 +222,23 @@ class UsuarioApiTest {
 
     static String dueno(String nombre, String email, Ambito ambito, String perfil) {
         return """
-                {"nombre": "%s", "email": "%s", "password": "clave-inicial-1", "ambitoId": %d, "perfil": "%s"}
-                """.formatted(nombre, email, ambito.getId(), perfil);
+                {"nombre": "%s", "usuario": "%s", "email": "%s", "password": "clave-inicial-1", "ambitoId": %d,
+                 "perfil": "%s"}
+                """.formatted(nombre, usuarioDe(nombre), email, ambito.getId(), perfil);
     }
 
     static String empleado(String nombre, String email, String password) {
+        return empleado(nombre, usuarioDe(nombre), email, password);
+    }
+
+    static String empleado(String nombre, String usuario, String email, String password) {
         return """
-                {"nombre": "%s", "email": "%s", "password": "%s"}
-                """.formatted(nombre, email, password);
+                {"nombre": "%s", "usuario": "%s", "email": "%s", "password": "%s"}
+                """.formatted(nombre, usuario, email, password);
+    }
+
+    /** Un usuario que no choca con los de {@link Datos#usuario(String)}, que no llevan punto. */
+    private static String usuarioDe(String nombre) {
+        return "nuevo." + nombre.toLowerCase().replaceAll("[^a-z]", "");
     }
 }

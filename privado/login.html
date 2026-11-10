@@ -965,7 +965,7 @@ const LinkBoton = ({ onClick, children }) => (
 );
 
 const FormIngreso = ({ aviso, onSesion, onOlvide }) => {
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -974,7 +974,7 @@ const FormIngreso = ({ aviso, onSesion, onOlvide }) => {
     e.preventDefault();
     setError("");
     setCargando(true);
-    const r = await GFAuth.login(email.trim(), password);
+    const r = await GFAuth.login(usuario.trim(), password);
     setCargando(false);
     if (!r.ok) {
       setError(mensajeDeError(r, "No se pudo iniciar sesión."));
@@ -987,16 +987,16 @@ const FormIngreso = ({ aviso, onSesion, onOlvide }) => {
   return (
     <form onSubmit={enviar} className="space-y-4" noValidate>
       {aviso && <Aviso tipo={aviso.tipo}>{aviso.texto}</Aviso>}
-      <Field label="Email">
-        <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)}
-          className={inputClass} placeholder="nombre@greenfire.com" autoFocus />
+      <Field label="Usuario o email">
+        <input type="text" required autoComplete="username" autoCapitalize="none" spellCheck={false} value={usuario}
+          onChange={(e) => setUsuario(e.target.value)} className={inputClass} autoFocus />
       </Field>
       <Field label="Contraseña">
         <input type="password" required autoComplete="current-password" value={password}
           onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="••••••••" />
       </Field>
       {error && <Aviso tipo="error">{error}</Aviso>}
-      <Button type="submit" disabled={cargando || !email.trim() || !password} className="w-full">
+      <Button type="submit" disabled={cargando || !usuario.trim() || !password} className="w-full">
         {cargando ? "Ingresando…" : "Ingresar"}
       </Button>
       <div className="text-center">

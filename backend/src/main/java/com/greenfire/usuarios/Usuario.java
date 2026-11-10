@@ -12,6 +12,8 @@ import jakarta.persistence.Table;
 public class Usuario extends EntidadBase {
 
     private String nombre;
+    /** Para el login, junto con el email: minúsculas, números, punto y guion bajo (3 a 30). */
+    private String usuario;
     private String email;
     private String passwordHash;
     private boolean esAdminTecnico;
@@ -32,6 +34,14 @@ public class Usuario extends EntidadBase {
 
     public void setNombre(String nombre) {
         this.nombre = nombre;
+    }
+
+    public String getUsuario() {
+        return usuario;
+    }
+
+    public void setUsuario(String usuario) {
+        this.usuario = usuario;
     }
 
     public String getEmail() {

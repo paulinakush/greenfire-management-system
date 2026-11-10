@@ -77,7 +77,7 @@ public class UsuarioService {
         validarPerfilDeDueno(req.perfil());
         Ambito ambito = ambitoActivo(req.ambitoId());
         validarPerfilParaAmbito(req.perfil(), ambito);
-        Usuario u = nuevoUsuario(req.nombre(), req.email(), req.password());
+        Usuario u = nuevoUsuario(req.nombre(), req.usuario(), req.email(), req.password());
         UsuarioAmbito ua = asignar(u, ambito, req.perfil(), sesion.usuarioId());
         auditarAlta(u, ua);
         return UsuarioResponse.de(u, List.of(ua));
@@ -153,7 +153,7 @@ public class UsuarioService {
     public UsuarioLocalResponse crearEmpleado(EmpleadoRequest req) {
         Sesion sesion = acceso.exigirPerfil(Perfil.dueno_local);
         Ambito ambito = ambitoActivo(sesion.ambitoId());
-        Usuario u = nuevoUsuario(req.nombre(), req.email(), req.password());
+        Usuario u = nuevoUsuario(req.nombre(), req.usuario(), req.email(), req.password());
         UsuarioAmbito ua = asignar(u, ambito, Perfil.empleado_local, sesion.usuarioId());
         auditarAlta(u, ua);
         return UsuarioLocalResponse.de(ua);
@@ -208,12 +208,16 @@ public class UsuarioService {
         return ambito;
     }
 
-    private Usuario nuevoUsuario(String nombre, String email, String password) {
+    private Usuario nuevoUsuario(String nombre, String usuario, String email, String password) {
+        if (usuarios.existeUsuario(usuario)) {
+            throw new ReglaNegocioException("Ya existe un usuario con ese nombre de usuario.");
+        }
         if (usuarios.existeEmail(email.trim())) {
             throw new ReglaNegocioException("Ya existe un usuario con ese email.");
         }
         Usuario u = new Usuario();
         u.setNombre(nombre.trim());
+        u.setUsuario(usuario);
         u.setEmail(email.trim());
         u.setPasswordHash(encoder.encode(password));
         return usuarios.save(u);
@@ -253,6 +257,7 @@ public class UsuarioService {
     private void auditarAlta(Usuario u, UsuarioAmbito ua) {
         Map<String, Object> detalle = new LinkedHashMap<>();
         detalle.put("nombre", u.getNombre());
+        detalle.put("usuario", u.getUsuario());
         detalle.put("email", u.getEmail());
         detalle.put("ambitoId", ua.getAmbito().getId());
         detalle.put("perfil", ua.getPerfil());

@@ -30,6 +30,7 @@ class AdminInicialRunnerTest {
         assertThat(usuarios.findAll()).filteredOn(Usuario::isEsAdminTecnico)
                 .singleElement()
                 .satisfies(admin -> {
+                    assertThat(admin.getUsuario()).isEqualTo("administrador");
                     assertThat(admin.getEmail()).isEqualTo("admin@greenfire.test");
                     assertThat(encoder.matches("clave-del-admin-1", admin.getPasswordHash())).isTrue();
                 });
@@ -48,7 +49,17 @@ class AdminInicialRunnerTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void rechazaUnUsuarioInvalido() {
+        assertThatThrownBy(() -> runner("Admin Tecnico", "admin@greenfire.test", "clave-del-admin-1").run(null))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     private AdminInicialRunner runner(String email, String password) {
-        return new AdminInicialRunner(usuarios, encoder, auditor, "Admin", email, password);
+        return runner("administrador", email, password);
+    }
+
+    private AdminInicialRunner runner(String usuario, String email, String password) {
+        return new AdminInicialRunner(usuarios, encoder, auditor, "Admin", usuario, email, password);
     }
 }
