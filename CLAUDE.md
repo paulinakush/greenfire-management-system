@@ -38,11 +38,12 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 
 - Perfiles fijos por ámbito: `dueno_fabrica`, `dueno_local` y `empleado_local`, más el administrador técnico (`usuarios.es_admin_tecnico`), que no tiene ámbito ni ve datos comerciales.
 - Los permisos se validan siempre en el servidor. El ámbito sale de la sesión, nunca de un parámetro que mande el front. Pedir por id un registro de otro ámbito devuelve 404.
-- Login propio (`seguridad.LoginService`) con sesión en la base (Spring Session JDBC). La sesión guarda un `seguridad.Sesion` (usuario, ámbito activo, perfil). Spring Security solo aporta CSRF, encabezados y filtros; no usa `UserDetails` ni `@PreAuthorize`.
+- Login propio (`seguridad.LoginService`) con usuario o email en el mismo campo, sin distinguir mayúsculas. La recuperación de contraseña es solo por email. El usuario (`usuarios.usuario`, V10) tiene de 3 a 30 letras minúsculas, números, punto o guion bajo: nunca lleva `@`, así que no se confunde con un email. El administrador técnico inicial toma el suyo de `ADMIN_USUARIO`.
+- Sesión en la base (Spring Session JDBC). La sesión guarda un `seguridad.Sesion` (usuario, ámbito activo, perfil). Spring Security solo aporta CSRF, encabezados y filtros; no usa `UserDetails` ni `@PreAuthorize`.
 - Cada servicio valida el acceso al principio, con `seguridad.Acceso`: `exigirAdminTecnico()`, `exigirPerfil(...)` o `exigirAmbito()`.
 - `seguridad.FiltroSesionVigente` verifica en cada pedido a `/api/**` que el usuario, su perfil y su ámbito sigan activos. Si no, cierra la sesión.
 - CSRF: el front pide `GET /api/auth/csrf` (deja la cookie `XSRF-TOKEN`) y manda ese valor en el header `X-XSRF-TOKEN` en cada POST, PUT o DELETE.
-- Para la API, 401 significa sin sesión y 403, sin permiso. Un login fallido responde siempre el mismo mensaje (`LoginService.LOGIN_FALLIDO`).
+- Para la API, 401 significa sin sesión y 403, sin permiso. Un login fallido responde siempre el mismo mensaje (`LoginService.LOGIN_FALLIDO`) y guarda en `auditorias.email_intentado` lo que se escribió en el campo, sea usuario o email.
 
 ## Cómo levantar el entorno
 
@@ -54,7 +55,7 @@ cd backend && ./mvnw spring-boot:run   # API y front en http://localhost:8080
 
 La app lee el `.env` de la raíz (`spring.config.import`), así que no hace falta exportar variables. El `.env` se lee como ISO-8859-1: no usar tildes en sus valores.
 
-Al arrancar, si no existe ningún administrador técnico, se crea uno con `ADMIN_EMAIL` y `ADMIN_PASSWORD` del `.env`.
+Al arrancar, si no existe ningún administrador técnico, se crea uno con `ADMIN_USUARIO`, `ADMIN_EMAIL` y `ADMIN_PASSWORD` del `.env`.
 
 ## Tests
 

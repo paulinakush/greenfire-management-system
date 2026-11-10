@@ -30,11 +30,11 @@ import jakarta.servlet.http.HttpServletRequest;
 public class LoginService {
 
     /**
-     * Único mensaje para cualquier login fallido (email inexistente, contraseña incorrecta, cuenta bloqueada
-     * o inactiva), para no revelar qué usuarios existen.
+     * Único mensaje para cualquier login fallido (usuario o email inexistente, contraseña incorrecta, cuenta
+     * bloqueada o inactiva), para no revelar qué usuarios existen.
      */
-    public static final String LOGIN_FALLIDO = "No se pudo iniciar sesión. Revisá el email y la contraseña. "
-            + "Después de varios intentos fallidos, la cuenta se bloquea temporalmente.";
+    public static final String LOGIN_FALLIDO = "No se pudo iniciar sesión. Revisá el usuario o email y la "
+            + "contraseña. Después de varios intentos fallidos, la cuenta se bloquea temporalmente.";
 
     private final UsuarioRepository usuarios;
     private final UsuarioAmbitoRepository perfiles;
@@ -44,7 +44,7 @@ public class LoginService {
     private final Auditor auditor;
     private final int intentosMaximos;
     private final Duration bloqueo;
-    /** Se compara contra este hash cuando el email no existe, para que la respuesta tarde lo mismo. */
+    /** Se compara contra este hash cuando el usuario no existe, para que la respuesta tarde lo mismo. */
     private final String hashFicticio;
 
     public LoginService(UsuarioRepository usuarios, UsuarioAmbitoRepository perfiles, PasswordEncoder encoder,
@@ -64,29 +64,30 @@ public class LoginService {
 
     /**
      * Devuelve vacío si el login falla. No lanza excepción, para que se guarden los intentos fallidos,
-     * el bloqueo y la auditoría.
+     * el bloqueo y la auditoría. {@code ingresado} es el usuario o el email, tal como se escribió; en los
+     * intentos fallidos queda en la auditoría.
      */
-    public Optional<SesionResponse> login(String email, String password, HttpServletRequest request) {
+    public Optional<SesionResponse> login(String ingresado, String password, HttpServletRequest request) {
         OffsetDateTime ahora = OffsetDateTime.now();
-        Optional<Usuario> encontrado = usuarios.buscarPorEmail(email.trim());
+        Optional<Usuario> encontrado = usuarios.buscarPorUsuarioOEmail(ingresado.trim());
         if (encontrado.isEmpty()) {
             encoder.matches(password, hashFicticio);
-            return fallido(null, email, "email_inexistente");
+            return fallido(null, ingresado, "usuario_inexistente");
         }
         Usuario usuario = encontrado.get();
         if (usuario.estaBloqueado(ahora)) {
-            return fallido(usuario.getId(), email, "cuenta_bloqueada");
+            return fallido(usuario.getId(), ingresado, "cuenta_bloqueada");
         }
         if (!encoder.matches(password, usuario.getPasswordHash())) {
-            registrarIntentoFallido(usuario, email, ahora);
-            return fallido(usuario.getId(), email, "password_incorrecta");
+            registrarIntentoFallido(usuario, ingresado, ahora);
+            return fallido(usuario.getId(), ingresado, "password_incorrecta");
         }
         if (!usuario.isActivo()) {
-            return fallido(usuario.getId(), email, "usuario_inactivo");
+            return fallido(usuario.getId(), ingresado, "usuario_inactivo");
         }
         List<UsuarioAmbito> vigentes = perfilesVigentes(usuario.getId());
         if (!usuario.isEsAdminTecnico() && vigentes.isEmpty()) {
-            return fallido(usuario.getId(), email, "sin_perfiles_activos");
+            return fallido(usuario.getId(), ingresado, "sin_perfiles_activos");
         }
 
         usuario.setIntentosFallidos(0);
@@ -138,18 +139,18 @@ public class LoginService {
         sesionHttp.cerrar(request);
     }
 
-    private void registrarIntentoFallido(Usuario usuario, String email, OffsetDateTime ahora) {
+    private void registrarIntentoFallido(Usuario usuario, String ingresado, OffsetDateTime ahora) {
         usuario.setIntentosFallidos(usuario.getIntentosFallidos() + 1);
         if (usuario.getIntentosFallidos() >= intentosMaximos) {
             usuario.setIntentosFallidos(0);
             usuario.setBloqueadoHasta(ahora.plus(bloqueo));
-            auditor.registrarAcceso("usuario_bloqueado", usuario.getId(), email,
+            auditor.registrarAcceso("usuario_bloqueado", usuario.getId(), ingresado,
                     Map.of("hasta", usuario.getBloqueadoHasta().toString()));
         }
     }
 
-    private Optional<SesionResponse> fallido(Long usuarioId, String email, String motivo) {
-        auditor.registrarAcceso("login_fallido", usuarioId, email, Map.of("motivo", motivo));
+    private Optional<SesionResponse> fallido(Long usuarioId, String ingresado, String motivo) {
+        auditor.registrarAcceso("login_fallido", usuarioId, ingresado, Map.of("motivo", motivo));
         return Optional.empty();
     }
 
@@ -166,7 +167,8 @@ public class LoginService {
                 .filter(p -> p.ambitoId().equals(sesion.ambitoId()))
                 .findFirst().orElse(null);
         return new SesionResponse(
-                new UsuarioSesion(usuario.getId(), usuario.getNombre(), usuario.getEmail(), usuario.isEsAdminTecnico()),
+                new UsuarioSesion(usuario.getId(), usuario.getNombre(), usuario.getUsuario(), usuario.getEmail(),
+                        usuario.isEsAdminTecnico()),
                 lista, activo);
     }
 }

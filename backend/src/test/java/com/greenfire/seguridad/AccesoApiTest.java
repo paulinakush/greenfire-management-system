@@ -73,12 +73,12 @@ class AccesoApiTest {
         RequestPostProcessor dueno = datos.en(centro, Perfil.dueno_local);
 
         mvc.perform(json(post("/api/admin/usuarios"), dueno, """
-                        {"nombre": "Otro", "email": "otro@greenfire.test", "password": "clave-inicial-1",
+                        {"nombre": "Otro", "usuario": "otro", "email": "otro@greenfire.test", "password": "clave-inicial-1",
                          "ambitoId": %d, "perfil": "dueno_local"}
                         """.formatted(centro.getId())))
                 .andExpect(status().isForbidden());
         mvc.perform(json(post("/api/usuarios"), dueno, """
-                        {"nombre": "Otro", "email": "otro@greenfire.test", "password": "clave-inicial-1",
+                        {"nombre": "Otro", "usuario": "otro", "email": "otro@greenfire.test", "password": "clave-inicial-1",
                          "perfil": "dueno_local"}
                         """))
                 .andExpect(status().isBadRequest());

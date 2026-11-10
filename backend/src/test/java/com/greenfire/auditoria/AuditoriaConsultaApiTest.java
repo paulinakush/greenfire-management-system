@@ -82,7 +82,7 @@ class AuditoriaConsultaApiTest {
     @Test
     void unDuenoVeElAltaDeSuCuentaHechaPorElAdministrador() throws Exception {
         String respuesta = mvc.perform(json(post("/api/admin/usuarios"), datos.admin(), """
-                        {"nombre": "Marta", "email": "marta@greenfire.test", "password": "clave-de-marta-1",
+                        {"nombre": "Marta", "usuario": "marta", "email": "marta@greenfire.test", "password": "clave-de-marta-1",
                          "ambitoId": %d, "perfil": "dueno_local"}""".formatted(centro.getId())))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -108,7 +108,7 @@ class AuditoriaConsultaApiTest {
         mvc.perform(json(put("/api/admin/ambitos/" + norte.getId()), admin, """
                 {"nombre": "Norte Renovado", "visibleWeb": true}""")).andExpect(status().isOk());
         mvc.perform(json(post("/api/admin/usuarios"), admin, """
-                {"nombre": "Raul", "email": "raul@greenfire.test", "password": "clave-de-raul-1",
+                {"nombre": "Raul", "usuario": "raul", "email": "raul@greenfire.test", "password": "clave-de-raul-1",
                  "ambitoId": %d, "perfil": "dueno_local"}""".formatted(norte.getId()))).andExpect(status().isCreated());
         mvc.perform(json(put("/api/admin/ambitos/" + centro.getId()), admin, """
                 {"nombre": "Centro", "visibleWeb": true}""")).andExpect(status().isOk());

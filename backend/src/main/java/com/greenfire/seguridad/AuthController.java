@@ -39,7 +39,7 @@ public class AuthController {
 
     @PostMapping("/login")
     public SesionResponse login(@Valid @RequestBody LoginRequest req, HttpServletRequest request) {
-        return login.login(req.email(), req.password(), request)
+        return login.login(req.usuario(), req.password(), request)
                 .orElseThrow(() -> new NoAutenticadoException(LoginService.LOGIN_FALLIDO));
     }
 

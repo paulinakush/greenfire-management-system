@@ -66,11 +66,38 @@ class MigracionTest {
 
     @Test
     void elEmailDelUsuarioEsUnicoSinImportarMayusculas() {
-        jdbc.update("insert into usuarios (nombre, email, password_hash) values ('A', 'ana@greenfire.com', 'x')");
+        insertarUsuario("ana", "ana@greenfire.com");
 
-        assertThatThrownBy(() -> jdbc.update(
-                "insert into usuarios (nombre, email, password_hash) values ('B', 'Ana@GreenFire.com', 'x')"))
+        assertThatThrownBy(() -> insertarUsuario("otra", "Ana@GreenFire.com"))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void elUsuarioEsUnico() {
+        insertarUsuario("ana", "ana@greenfire.com");
+
+        assertThatThrownBy(() -> insertarUsuario("ana", "otra@greenfire.com"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void elUsuarioSoloAdmiteMinusculasNumerosPuntoYGuionBajoDe3A30Caracteres() {
+        insertarUsuario("ana.perez_2", "ana@greenfire.com");
+
+        for (String invalido : new String[] {"Ana", "ana@greenfire", "ana perez", "ana-perez", "añá", "an",
+                "a".repeat(31)}) {
+            // Cada intento con su savepoint: un error aborta la transacción del test.
+            jdbc.execute("savepoint antes");
+            assertThatThrownBy(() -> insertarUsuario(invalido, "x@greenfire.com"))
+                    .as(invalido)
+                    .isInstanceOf(DataIntegrityViolationException.class);
+            jdbc.execute("rollback to savepoint antes");
+        }
+    }
+
+    private void insertarUsuario(String usuario, String email) {
+        jdbc.update("insert into usuarios (nombre, usuario, email, password_hash) values ('Nombre', ?, ?, 'x')",
+                usuario, email);
     }
 
     private long crearEntidad(String cuit) {

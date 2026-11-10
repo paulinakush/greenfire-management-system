@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 /** Alta de un dueño (de fábrica o de local) por el administrador técnico. */
 public record DuenoRequest(
         @NotBlank @Size(max = 120) String nombre,
+        @UsuarioValido String usuario,
         @NotBlank @Email @Size(max = 255) String email,
         @PasswordValida String password,
         @NotNull Long ambitoId,

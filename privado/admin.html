@@ -94,8 +94,8 @@
       root.appendChild(tabla("Ámbitos", ["Nombre", "Tipo", "Entidad fiscal", "Visible en la web", "Central", "Activo"],
         ambitos.data.map((a) => [a.nombre, GFAuth.TIPOS_AMBITO[a.tipo] || a.tipo, a.entidadFiscalRazonSocial,
           siNo(a.visibleWeb), siNo(a.esCentral), siNo(a.activo)])));
-      root.appendChild(tabla("Usuarios", ["Nombre", "Email", "Perfiles", "Activo", "Bloqueado"],
-        usuarios.data.map((u) => [u.nombre, u.email,
+      root.appendChild(tabla("Usuarios", ["Nombre", "Usuario", "Email", "Perfiles", "Activo", "Bloqueado"],
+        usuarios.data.map((u) => [u.nombre, u.usuario, u.email,
           u.perfiles.length === 0 ? "Sin perfiles (o administrador técnico)"
             : u.perfiles.map((p) => (GFAuth.PERFILES[p.perfil] || p.perfil) + " en " + p.ambitoNombre
                 + (p.activo ? "" : " (inactivo)")).join(" · "),

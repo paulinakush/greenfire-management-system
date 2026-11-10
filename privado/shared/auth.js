@@ -79,9 +79,10 @@
 
   // --- Sesión ---
 
-  const login = async (email, password) => {
+  /** usuario es el nombre de usuario o el email: el servidor busca por los dos. */
+  const login = async (usuario, password) => {
     await pedirCsrf();
-    const r = await api("/api/auth/login", { method: "POST", body: { email, password } });
+    const r = await api("/api/auth/login", { method: "POST", body: { usuario, password } });
     if (r.ok) sessionStorage.setItem(HUBO_SESION, "1");
     return r;
   };
