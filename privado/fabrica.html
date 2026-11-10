@@ -2578,7 +2578,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(<FabricaApp />);
 </script>
 
 <script>
-  (function () {
+  // Primero se valida la sesión contra la API (shared/auth.js); sin sesión, al login.
+  GFAuth.arrancar(["dueno_fabrica"], function () {
     var source = document.getElementById("app-source").textContent;
     try {
       var output = Babel.transform(source, {
@@ -2595,7 +2596,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(<FabricaApp />);
         "</pre>";
       console.error(err);
     }
-  })();
+  });
 </script>
 </body>
 </html>

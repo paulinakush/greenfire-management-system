@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Green Fire | Administración técnica</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="shared/theme.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; }
+  body { font-family: 'Plus Jakarta Sans', sans-serif; }
+</style>
+</head>
+<body class="bg-neutral/20 text-deep antialiased">
+<div id="root" class="max-w-6xl mx-auto px-4 py-8">
+  <p class="text-sm text-deep/50">Cargando…</p>
+</div>
+
+<script src="shared/auth.js"></script>
+<script>
+  /*
+   * Administración técnica: por ahora, solo consulta de ámbitos, usuarios y entidades fiscales, con los datos
+   * reales de la API. Las altas y ediciones se hacen por la API hasta que se construya esta interfaz.
+   */
+  (function () {
+    const CONDICIONES = {
+      responsable_inscripto: "Responsable inscripto",
+      monotributo: "Monotributo",
+      exento: "Exento",
+    };
+
+    const el = (tag, clase, texto) => {
+      const e = document.createElement(tag);
+      if (clase) e.className = clase;
+      if (texto !== undefined && texto !== null) e.textContent = texto;
+      return e;
+    };
+
+    const tabla = (titulo, columnas, filas) => {
+      const seccion = el("section", "bg-white rounded-2xl shadow-sm border border-deep/10 p-5 mb-6");
+      seccion.appendChild(el("h2", "font-display font-bold text-lg mb-3", titulo + " (" + filas.length + ")"));
+      const envoltura = el("div", "overflow-x-auto");
+      const t = el("table", "w-full text-sm");
+      const cabeza = el("tr", "text-left text-deep/50 border-b border-deep/10");
+      columnas.forEach((c) => cabeza.appendChild(el("th", "py-2 pr-4 font-semibold", c)));
+      t.appendChild(el("thead")).appendChild(cabeza);
+      const cuerpo = el("tbody");
+      if (filas.length === 0) {
+        const tr = el("tr");
+        const td = el("td", "py-3 text-deep/45", "No hay registros.");
+        td.colSpan = columnas.length;
+        tr.appendChild(td);
+        cuerpo.appendChild(tr);
+      }
+      filas.forEach((f) => {
+        const tr = el("tr", "border-b border-deep/5");
+        f.forEach((v) => tr.appendChild(el("td", "py-2 pr-4 align-top", v)));
+        cuerpo.appendChild(tr);
+      });
+      t.appendChild(cuerpo);
+      envoltura.appendChild(t);
+      seccion.appendChild(envoltura);
+      return seccion;
+    };
+
+    const siNo = (v) => (v ? "Sí" : "No");
+
+    GFAuth.arrancar("admin", async function (sesion) {
+      const root = document.getElementById("root");
+      const [ambitos, usuarios, entidades] = await Promise.all([
+        GFAuth.api("/api/admin/ambitos"),
+        GFAuth.api("/api/admin/usuarios"),
+        GFAuth.api("/api/admin/entidades-fiscales"),
+      ]);
+      if ([ambitos, usuarios, entidades].some((r) => r.status === 401)) {
+        window.location.replace("login.html?motivo=vencida");
+        return;
+      }
+      root.innerHTML = "";
+      const encabezado = el("div", "mb-6");
+      encabezado.appendChild(el("h1", "font-display font-bold text-2xl", "Administración técnica"));
+      encabezado.appendChild(el("p", "text-sm text-deep/60",
+        "Consulta de ámbitos, usuarios y entidades fiscales. Las altas y ediciones todavía se hacen por la API."));
+      root.appendChild(encabezado);
+
+      const error = [ambitos, usuarios, entidades].find((r) => !r.ok);
+      if (error) {
+        root.appendChild(el("p", "text-sm text-red-700", (error.data && error.data.mensaje) || "No se pudieron cargar los datos."));
+        return;
+      }
+      root.appendChild(tabla("Ámbitos", ["Nombre", "Tipo", "Entidad fiscal", "Visible en la web", "Central", "Activo"],
+        ambitos.data.map((a) => [a.nombre, GFAuth.TIPOS_AMBITO[a.tipo] || a.tipo, a.entidadFiscalRazonSocial,
+          siNo(a.visibleWeb), siNo(a.esCentral), siNo(a.activo)])));
+      root.appendChild(tabla("Usuarios", ["Nombre", "Email", "Perfiles", "Activo", "Bloqueado"],
+        usuarios.data.map((u) => [u.nombre, u.email,
+          u.perfiles.length === 0 ? "Sin perfiles (o administrador técnico)"
+            : u.perfiles.map((p) => (GFAuth.PERFILES[p.perfil] || p.perfil) + " en " + p.ambitoNombre
+                + (p.activo ? "" : " (inactivo)")).join(" · "),
+          siNo(u.activo), siNo(u.bloqueado)])));
+      root.appendChild(tabla("Entidades fiscales", ["Razón social", "CUIT", "Condición frente al IVA", "Activa"],
+        entidades.data.map((e) => [e.razonSocial, e.cuit, CONDICIONES[e.condicionIva] || e.condicionIva, siNo(e.activo)])));
+    });
+  })();
+</script>
+</body>
+</html>
