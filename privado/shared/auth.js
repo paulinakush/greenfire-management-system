@@ -176,7 +176,7 @@
       '<span style="color:#00AE4C;font-weight:700">●</span> <span data-gf="ambito-perfil"></span>' +
       ' <span style="opacity:.6">· <span data-gf="usuario"></span></span>';
     izquierda.querySelector('[data-gf="ambito-perfil"]').textContent = quien;
-    izquierda.querySelector('[data-gf="usuario"]').textContent = sesion.usuario.nombre;
+    izquierda.querySelector('[data-gf="usuario"]').textContent = sesion.usuario.nombre + " · " + sesion.usuario.usuario;
     const derecha = document.createElement("div");
     derecha.style.cssText = "display:flex;gap:8px;";
     const boton = (texto, alHacerClick) => {
