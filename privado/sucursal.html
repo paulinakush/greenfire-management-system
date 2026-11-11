@@ -14,6 +14,9 @@
   body { font-family: 'Plus Jakarta Sans', sans-serif; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  /* La barra de sesión (shared/auth.js) queda fija arriba; el encabezado, el menú y el contenido
+     se corren su alto (--gf-barra, que se mide al arrancar) para que no se tapen. */
+  #gf-barra-sesion { position: fixed !important; top: 0; left: 0; right: 0; }
 </style>
 </head>
 <body class="bg-[#F4F7F5] text-deep antialiased">
@@ -382,9 +385,9 @@ const Toast = ({ message, kind = "success", onClose }) => {
 const Modal = ({ open, onClose, title, children, wide }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-deep/50" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-deep/50" style={{ paddingTop: "calc(var(--gf-barra, 0px) + 1rem)" }} onClick={onClose}>
       <div
-        className={`bg-white rounded-2xl shadow-xl w-full ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto`}
+        className={`bg-white rounded-2xl shadow-xl w-full ${wide === "xl" ? "max-w-4xl" : wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-deep/8 sticky top-0 bg-white">
@@ -411,7 +414,7 @@ const inputClass =
 
 /* ---------- Topbar ---------- */
 
-const Topbar = ({ session, quickAccess, activeKey, onNavigate, notifCount, onLogout, onMenuClick }) => {
+const Topbar = ({ session, quickAccess, activeKey, onNavigate, notifCount, notifTitle, onLogout, onMenuClick }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const iniciales = session.nombre
     .split(" ")
@@ -421,12 +424,12 @@ const Topbar = ({ session, quickAccess, activeKey, onNavigate, notifCount, onLog
     .toUpperCase();
 
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 z-40 bg-deep text-white flex items-center gap-3 px-4 md:px-6">
+    <header style={{ top: "var(--gf-barra, 0px)" }} className="fixed left-0 right-0 h-16 z-40 bg-deep text-white flex items-center gap-3 px-4 md:px-6">
       <button onClick={onMenuClick} className="p-2 -ml-2 rounded-xl text-white/80 hover:text-white hover:bg-white/10 md:hidden shrink-0" title="Menú">
         <MenuIcon className="w-5 h-5" />
       </button>
       <button
-        onClick={() => onNavigate(session.rolNombre === "empleado_sucursal" ? "clientes" : "dashboard")}
+        onClick={() => onNavigate(session.rolNombre === "empleado_sucursal" ? "ventas" : "dashboard")}
         title="Green Fire"
         className="p-2.5 rounded-xl text-institutional hover:bg-white/10 transition-colors shrink-0"
       >
@@ -454,7 +457,7 @@ const Topbar = ({ session, quickAccess, activeKey, onNavigate, notifCount, onLog
 
       <div className="flex-1" />
 
-      <button className="relative p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 shrink-0" title="Notificaciones">
+      <button className="relative p-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 shrink-0" title={notifTitle || "Notificaciones"}>
         <BellIcon className="w-5 h-5" />
         {notifCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">
@@ -506,7 +509,8 @@ const Sidebar = ({ modules, activeKey, onNavigate, mobileOpen, onCloseMobile }) 
     <>
       {mobileOpen && <div className="fixed inset-0 bg-deep/60 z-20 md:hidden" onClick={onCloseMobile} />}
       <aside
-        className={`fixed top-16 left-0 bottom-0 w-64 bg-deep border-r border-white/5 overflow-y-auto py-4 z-30 transition-transform duration-200 md:translate-x-0 ${
+        style={{ top: "calc(4rem + var(--gf-barra, 0px))" }}
+        className={`fixed left-0 bottom-0 w-64 bg-deep border-r border-white/5 overflow-y-auto py-4 z-30 transition-transform duration-200 md:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -571,7 +575,7 @@ const Sidebar = ({ modules, activeKey, onNavigate, mobileOpen, onCloseMobile }) 
   );
 };
 
-const PrivateShell = ({ session, modules, quickAccess, activeKey, onNavigate, notifCount = 0, onLogout, children }) => {
+const PrivateShell = ({ session, modules, quickAccess, activeKey, onNavigate, notifCount = 0, notifTitle, onLogout, children }) => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   return (
     <div className="min-h-screen bg-[#F4F7F5]">
@@ -581,6 +585,7 @@ const PrivateShell = ({ session, modules, quickAccess, activeKey, onNavigate, no
         activeKey={activeKey}
         onNavigate={onNavigate}
         notifCount={notifCount}
+        notifTitle={notifTitle}
         onLogout={onLogout}
         onMenuClick={() => setMobileNavOpen(true)}
       />
@@ -591,7 +596,7 @@ const PrivateShell = ({ session, modules, quickAccess, activeKey, onNavigate, no
         mobileOpen={mobileNavOpen}
         onCloseMobile={() => setMobileNavOpen(false)}
       />
-      <main className="pt-16 pl-0 md:pl-64 min-h-screen">
+      <main style={{ paddingTop: "calc(4rem + var(--gf-barra, 0px))" }} className="pl-0 md:pl-64 min-h-screen">
         <div className="px-5 md:px-8 py-8 max-w-[1400px]">{children}</div>
       </main>
     </div>
@@ -980,6 +985,16 @@ const CONFIG_ITEMS = [
 const modulosParaRol = (rolNombre) => {
   if (rolNombre === "empleado_sucursal") {
     return [
+      {
+        key: "caja-ventas",
+        label: "Caja y ventas",
+        icon: <CashIcon />,
+        children: [
+          { key: "ventas", label: "Nueva venta" },
+          { key: "ventas-dia", label: "Ventas del día" },
+          { key: "caja", label: "Caja" },
+        ],
+      },
       { key: "clientes", label: "Clientes", icon: <IdCardIcon /> },
       {
         key: "ventas",
@@ -1010,6 +1025,8 @@ const modulosParaRol = (rolNombre) => {
       label: "Ventas",
       icon: <CashIcon />,
       children: [
+        { key: "ventas", label: "Nueva venta" },
+        { key: "ventas-dia", label: "Ventas del día" },
         { key: "venta-facturas", label: "Facturas" },
         { key: "venta-presupuestos", label: "Presupuestos" },
         { key: "venta-recibos", label: "Recibos" },
@@ -1040,7 +1057,7 @@ const modulosParaRol = (rolNombre) => {
       label: "Caja",
       icon: <BoxIcon />,
       children: [
-        { key: "caja", label: "Movimientos" },
+        { key: "caja", label: "Apertura y cierre" },
         { key: "caja-cheques-terceros", label: "Cheques Terceros" },
         { key: "caja-cheques-propios", label: "Cheques Propios" },
         { key: "caja-cuentas-bancarias", label: "Cuentas Bancarias" },
@@ -1076,6 +1093,7 @@ const quickAccessParaRol = (rolNombre) =>
         { key: "ajuste", label: "Ajuste de stock", icon: <AlertIcon className="w-5 h-5" /> },
         { key: "qa-factura-cf", target: "venta-facturas", label: "Nueva Factura de Venta a Consumidor Final", icon: <IdCardIcon className="w-5 h-5" /> },
         { key: "qa-presupuesto-cf", target: "venta-presupuestos", label: "Nuevo Presupuesto a Consumidor Final", icon: <IdCardIcon className="w-5 h-5" /> },
+        { key: "qa-nueva-venta", target: "ventas", label: "Nueva venta", icon: <CashIcon className="w-5 h-5" /> },
         { key: "qa-cerrar-caja", target: "caja", label: "Cerrar Caja", icon: <BoxIcon className="w-5 h-5" /> },
         { key: "qa-arca", target: "config-integraciones", label: "Conexión ARCA", icon: <PlugIcon className="w-5 h-5" /> },
       ]
@@ -1084,7 +1102,8 @@ const quickAccessParaRol = (rolNombre) =>
         { key: "qa-nuevo-pedido", target: "pedidos", label: "Nuevo Pedido", icon: <ClipboardIcon className="w-5 h-5" /> },
         { key: "ingreso", label: "Nuevo Movimiento (ingreso de mercadería)", icon: <TruckIcon className="w-5 h-5" /> },
         { key: "catalogo-consulta", label: "Consultar Precio de Producto/s", icon: <LeafIcon className="w-5 h-5" /> },
-        { key: "ventas", label: "Venta a Consumidor Final (sin numeración fiscal)", icon: <CashIcon className="w-5 h-5" /> },
+        { key: "ventas", label: "Nueva venta", icon: <CashIcon className="w-5 h-5" /> },
+        { key: "caja", label: "Caja", icon: <BoxIcon className="w-5 h-5" /> },
       ];
 
 const EYEBROWS = {
@@ -1109,7 +1128,8 @@ const EYEBROWS = {
   grupos: { n: "16", label: "Productos/Servicios" },
   variantes: { n: "17", label: "Productos/Servicios" },
   depositos: { n: "18", label: "Productos/Servicios" },
-  ventas: { n: "19", label: "Caja" },
+  ventas: { n: "19", label: "Ventas" },
+  "ventas-dia": { n: "19", label: "Ventas" },
   caja: { n: "20", label: "Caja" },
   "caja-cheques-terceros": { n: "21", label: "Caja" },
   "caja-cheques-propios": { n: "22", label: "Caja" },
@@ -1435,9 +1455,10 @@ const FECHA_FILTROS = [
 const MiniButton = ({ variant = "primary", className = "", ...rest }) => {
   const variants = {
     primary: "bg-institutional text-white hover:bg-medium",
+    secondary: "bg-white text-deep border border-deep/15 hover:border-deep/30",
     danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50",
   };
-  return <button className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${variants[variant]} ${className}`} {...rest} />;
+  return <button type="button" className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${variants[variant]} ${className}`} {...rest} />;
 };
 
 const PedidoDetalleModal = ({ pedido, onClose, session, bump, showToast }) => {
@@ -1761,125 +1782,1299 @@ const PedidosTab = ({ session, bump, showToast }) => {
 };
 
 /* ---------------------------------------------------------
-   VENTAS PRESENCIALES
+   CAJA Y VENTAS CONECTADAS A LA API
+   Estas pantallas usan datos reales (/api/caja, /api/ventas,
+   /api/precios, /api/stock, /api/clientes). El perfil sale de la
+   sesión real (GF_SESION_REAL), no de los datos de prueba, y los
+   permisos los vuelve a validar siempre el servidor.
 --------------------------------------------------------- */
-const VentasTab = ({ session, bump, showToast }) => {
-  const productos = GFDB.get("productos");
-  const [lineas, setLineas] = useState([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
-  const [medioPago, setMedioPago] = useState("efectivo");
-  const [medioFiltro, setMedioFiltro] = useState("todos");
+const { useEffect, useRef } = React;
 
-  const setLinea = (idx, patch) => setLineas((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-  const addLinea = () => setLineas((prev) => [...prev, { productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
-  const removeLinea = (idx) => setLineas((prev) => prev.filter((_, i) => i !== idx));
+const perfilReal = () => window.GF_SESION_REAL?.ambitoActivo?.perfil;
+const esDueno = () => perfilReal() === "dueno_local";
 
-  const total = lineas.reduce((acc, l) => acc + Number(l.cantidad || 0) * Number(l.precio || 0), 0);
+const PANTALLAS_CONECTADAS = ["ventas", "ventas-dia", "caja"];
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const items = lineas
-      .filter((l) => l.productoId && Number(l.cantidad) > 0)
-      .map((l) => ({ productoId: Number(l.productoId), cantidad: Number(l.cantidad), precioUnitario: Number(l.precio) }));
-    if (items.length === 0) return;
-    GFDB.registrarVentaPresencial({ sucursalId: session.sucursalId, usuarioId: session.usuarioId, items, medioPago });
-    setLineas([{ productoId: productos[0]?.id || "", cantidad: 1, precio: productos[0]?.precio || 0 }]);
-    setMedioPago("efectivo");
-    bump();
-    showToast("Venta registrada y stock actualizado.");
+const pesos = (n) =>
+  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n || 0));
+const cantidadTexto = (n) => Number(n || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
+const porcentajeTexto = (fraccion) =>
+  fraccion === null || fraccion === undefined ? "—" : `${(Number(fraccion) * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 })} %`;
+const hora = (iso) => (iso ? new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }) : "-");
+const hoyISO = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
+const redondear2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+const MEDIOS = { efectivo: "Efectivo", transferencia: "Transferencia", billetera_virtual: "Billetera virtual", cuenta_corriente: "Cuenta corriente" };
+const RUBROS = { gasto: "Gasto", retiro: "Retiro", aporte: "Aporte", pago_fabrica: "Pago a la fábrica", otro: "Otro" };
+const TIPO_DEL_RUBRO = { gasto: "egreso", retiro: "egreso", pago_fabrica: "egreso", aporte: "ingreso" };
+const ORIGENES = { manual: "Manual", venta: "Venta", cobranza: "Cobranza", devolucion: "Devolución" };
+const CAMPOS = {
+  saldoInicial: "Saldo inicial",
+  efectivoContado: "Efectivo contado",
+  monto: "Monto",
+  observacion: "Observación",
+  motivo: "Motivo",
+  medioPago: "Medio de pago",
+  porcentajeDescuento: "Descuento",
+  renglones: "Artículos",
+};
+
+/** Sin sesión (401): al login, avisando que venció. Igual que shared/auth.js. */
+const sesionVencida = () => {
+  try {
+    sessionStorage.removeItem("gf_hubo_sesion");
+  } catch (e) {}
+  window.location.replace("login.html?motivo=vencida");
+};
+
+/** GFAuth.api manda el token CSRF en cada POST, PUT o DELETE. Acá se agrega el manejo de la sesión vencida. */
+const pedirApi = async (ruta, opciones) => {
+  const r = await GFAuth.api(ruta, opciones);
+  if (r.status === 401) {
+    sesionVencida();
+    return new Promise(() => {});
+  }
+  return r;
+};
+
+/** Un mensaje claro para cada error de la API. El servidor ya responde en castellano; acá se agregan pistas. */
+const mensajeDeError = (r) => {
+  const d = r.data || {};
+  const base = d.mensaje || "";
+  if (r.status === 0) return base || "No se pudo conectar con el servidor.";
+  if (r.status >= 500) return "Ocurrió un error en el servidor y no se guardó nada. Probá de nuevo en un momento.";
+  let texto = base;
+  if (d.campos && Object.keys(d.campos).length) {
+    const detalle = Object.entries(d.campos)
+      .map(([campo, error]) => `${CAMPOS[campo.replace(/\[\d+\].*/, "")] || campo}: ${error}`)
+      .join(" · ");
+    texto = texto ? `${texto} (${detalle})` : detalle;
+  }
+  if (base.startsWith("Stock insuficiente")) return `No hay stock suficiente para esta venta. ${base.replace(/^Stock insuficiente:?\s*/, "")}`.trim();
+  if (base.startsWith("No hay una caja abierta")) return `${base} Abrila desde Caja y volvé a intentar.`;
+  if (r.status === 403 && (!base || base === "No tenés permiso para realizar esta acción."))
+    return "Tu perfil no tiene permiso para hacer esto.";
+  if (r.status === 404 && !base) return "No se encontró lo que buscabas.";
+  return texto || `Error ${r.status}.`;
+};
+
+const Aviso = ({ tipo = "error", children, className = "" }) => {
+  const estilos = {
+    error: "border-red-200 bg-red-50 text-red-800",
+    aviso: "border-amber-300 bg-amber-50 text-amber-900",
+    info: "border-institutional/30 bg-institutional/5 text-deep",
+    ok: "border-institutional/40 bg-institutional/10 text-deep",
   };
+  return (
+    <div role={tipo === "error" ? "alert" : "status"} className={`flex gap-3 items-start rounded-2xl border px-4 py-3 text-sm ${estilos[tipo]} ${className}`}>
+      {tipo === "ok" ? <CheckIcon className="w-5 h-5 shrink-0 text-institutional" /> : <AlertIcon className="w-5 h-5 shrink-0 mt-px" />}
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+};
 
-  const ventas = GFDB.query("ventas", (v) => v.sucursal_id === session.sucursalId)
-    .filter((v) => medioFiltro === "todos" || v.medio_pago === medioFiltro)
-    .sort((a, b) => new Date(b.fecha_hora) - new Date(a.fecha_hora));
+const AvisoDatosDePrueba = () => (
+  <Aviso tipo="aviso" className="mb-6">
+    <span className="font-semibold">Datos de prueba.</span> Esta pantalla todavía no está conectada al sistema: lo que muestra es de ejemplo y lo
+    que se cargue no queda registrado. Caja, Nueva venta y Ventas del día ya usan datos reales.
+  </Aviso>
+);
 
-  const columns = [
-    { key: "fecha", label: "Fecha", render: (v) => fmtDateTime(v.fecha_hora) },
-    {
-      key: "usuario",
-      label: "Usuario",
-      render: (v) => GFDB.find("usuarios", v.usuario_id)?.nombre || "-",
-      searchValue: (v) => GFDB.find("usuarios", v.usuario_id)?.nombre || "",
-    },
-    { key: "medio", label: "Medio de pago", render: (v) => enumLabel("medio_pago", v.medio_pago) },
-    { key: "total", label: "Total", render: (v) => money(v.total) },
-  ];
+const Pill = ({ color = "gris", children }) => {
+  const c = {
+    verde: "bg-institutional/15 text-institutional",
+    rojo: "bg-red-100 text-red-700",
+    ambar: "bg-amber-100 text-amber-800",
+    gris: "bg-neutral/25 text-deep/70",
+  }[color];
+  return <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${c}`}>{children}</span>;
+};
+
+const EstadoVenta = ({ venta }) => (
+  <span className="inline-flex flex-wrap gap-1">
+    {venta.estado === "anulada" ? <Pill color="rojo">Anulada</Pill> : <Pill color="verde">Confirmada</Pill>}
+    {venta.estado === "confirmada" && Number(venta.totalDevuelto) > 0 && <Pill color="ambar">Con devolución</Pill>}
+  </span>
+);
+
+const Diferencia = ({ valor }) => {
+  if (valor === null || valor === undefined) return <span>—</span>;
+  const n = Number(valor);
+  if (n === 0) return <Pill color="verde">Sin diferencia</Pill>;
+  return <Pill color={n < 0 ? "rojo" : "ambar"}>{n < 0 ? `Faltan ${pesos(-n)}` : `Sobran ${pesos(n)}`}</Pill>;
+};
+
+const abrirImprimible = (comprobanteId) => window.open(`/api/comprobantes/${comprobanteId}/imprimible`, "_blank", "noopener");
+
+const Th = ({ children, className = "" }) => <th className={`text-left px-4 py-3 whitespace-nowrap ${className}`}>{children}</th>;
+const Td = ({ children, className = "" }) => <td className={`px-4 py-3 border-t border-deep/5 ${className}`}>{children}</td>;
+
+/* ---------- Caja ---------- */
+
+/** El cierre se lee igual en la vista del empleado (cierre anidado) y en la del dueño (totales y resumen). */
+const datosCierre = (s) =>
+  s.cierre
+    ? { esperado: s.cierre.efectivoEsperado, contado: s.cierre.efectivoContado, diferencia: s.cierre.diferencia, total: s.cierre.totalGeneral, cerradaAt: s.cierre.cerradaAt, usuario: s.cierre.usuarioCierre }
+    : {
+        esperado: s.totales ? s.totales.efectivoEsperado : s.efectivoEsperado,
+        contado: s.efectivoContado,
+        diferencia: s.diferencia,
+        total: s.totales ? s.totales.totalGeneral : s.totalGeneral,
+        cerradaAt: s.cerradaAt,
+        usuario: s.usuarioCierre,
+      };
+
+const AbrirCajaForm = ({ onHecho, showToast }) => {
+  const [saldo, setSaldo] = useState("");
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    const r = await pedirApi("/api/caja/abrir", { method: "POST", body: { saldoInicial: Number(saldo || 0) } });
+    setEnviando(false);
+    if (!r.ok) return setError(mensajeDeError(r));
+    showToast("Caja abierta.");
+    onHecho();
+  };
+  return (
+    <form onSubmit={enviar} className="flex flex-wrap items-end gap-3">
+      <div className="w-48">
+        <Field label="Saldo inicial en efectivo">
+          <input type="number" min="0" step="0.01" required value={saldo} onChange={(e) => setSaldo(e.target.value)} className={inputClass} placeholder="0,00" />
+        </Field>
+      </div>
+      <Button type="submit" disabled={enviando}>
+        {enviando ? "Abriendo…" : "Abrir caja"}
+      </Button>
+      {error && <Aviso className="w-full">{error}</Aviso>}
+    </form>
+  );
+};
+
+const MovimientoCajaForm = ({ dueno, onHecho, showToast }) => {
+  const rubros = dueno ? ["gasto", "aporte", "retiro", "pago_fabrica", "otro"] : ["gasto", "aporte", "otro"];
+  const vacio = { rubro: "gasto", tipo: "egreso", medioPago: "efectivo", monto: "", observacion: "" };
+  const [f, setF] = useState(vacio);
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const tipo = TIPO_DEL_RUBRO[f.rubro] || f.tipo;
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    const body = { rubro: f.rubro, medioPago: f.medioPago, monto: Number(f.monto), observacion: f.observacion };
+    if (f.rubro === "otro") body.tipo = f.tipo;
+    const r = await pedirApi("/api/caja/movimientos", { method: "POST", body });
+    setEnviando(false);
+    if (!r.ok) return setError(mensajeDeError(r));
+    showToast(`${tipo === "ingreso" ? "Ingreso" : "Egreso"} registrado.`);
+    setF(vacio);
+    onHecho();
+  };
+  return (
+    <form onSubmit={enviar} className="space-y-3">
+      <div className="grid sm:grid-cols-4 gap-3">
+        <Field label="Rubro">
+          <select value={f.rubro} onChange={(e) => setF({ ...f, rubro: e.target.value })} className={inputClass}>
+            {rubros.map((r) => (
+              <option key={r} value={r}>
+                {RUBROS[r]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Tipo">
+          {f.rubro === "otro" ? (
+            <select value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} className={inputClass}>
+              <option value="ingreso">Ingreso</option>
+              <option value="egreso">Egreso</option>
+            </select>
+          ) : (
+            <input readOnly value={tipo === "ingreso" ? "Ingreso" : "Egreso"} className={`${inputClass} bg-deep/[0.03]`} />
+          )}
+        </Field>
+        <Field label="Medio">
+          <select value={f.medioPago} onChange={(e) => setF({ ...f, medioPago: e.target.value })} className={inputClass}>
+            {["efectivo", "transferencia", "billetera_virtual"].map((m) => (
+              <option key={m} value={m}>
+                {MEDIOS[m]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Monto">
+          <input type="number" min="0.01" step="0.01" required value={f.monto} onChange={(e) => setF({ ...f, monto: e.target.value })} className={inputClass} />
+        </Field>
+      </div>
+      <Field label="Observación">
+        <input required maxLength={500} value={f.observacion} onChange={(e) => setF({ ...f, observacion: e.target.value })} className={inputClass} placeholder="Por ejemplo: compra de bolsas" />
+      </Field>
+      {error && <Aviso>{error}</Aviso>}
+      <Button type="submit" variant="secondary" disabled={enviando}>
+        <PlusIcon /> {enviando ? "Registrando…" : "Registrar movimiento"}
+      </Button>
+    </form>
+  );
+};
+
+const CerrarCajaForm = ({ dueno, esperado, onCerrada }) => {
+  const [contado, setContado] = useState("");
+  const [obs, setObs] = useState("");
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    const r = await pedirApi("/api/caja/cerrar", { method: "POST", body: { efectivoContado: Number(contado), observaciones: obs || null } });
+    setEnviando(false);
+    if (!r.ok) return setError(mensajeDeError(r));
+    onCerrada(r.data);
+  };
+  return (
+    <form onSubmit={enviar} className="space-y-3">
+      <p className="text-sm text-deep/60">
+        {dueno
+          ? `Contá el efectivo de la caja. El esperado es ${pesos(esperado)}.`
+          : "Contá el efectivo que hay en la caja e ingresalo. La diferencia con lo esperado se muestra después del cierre."}
+      </p>
+      <div className="grid sm:grid-cols-[200px_1fr] gap-3">
+        <Field label="Efectivo contado">
+          <input type="number" min="0" step="0.01" required value={contado} onChange={(e) => setContado(e.target.value)} className={inputClass} />
+        </Field>
+        <Field label="Observaciones (opcional)">
+          <input maxLength={1000} value={obs} onChange={(e) => setObs(e.target.value)} className={inputClass} />
+        </Field>
+      </div>
+      {error && <Aviso>{error}</Aviso>}
+      <Button type="submit" disabled={enviando}>
+        {enviando ? "Cerrando…" : "Cerrar caja"}
+      </Button>
+    </form>
+  );
+};
+
+const ResultadoCierre = ({ sesion }) => {
+  const c = datosCierre(sesion);
+  return (
+    <Aviso tipo="ok" className="mb-6">
+      <p className="font-semibold mb-2">Caja cerrada{c.cerradaAt ? ` a las ${hora(c.cerradaAt)}` : ""}.</p>
+      <div className="grid grid-cols-[auto_auto] gap-x-6 gap-y-1 w-fit">
+        <span className="text-deep/60">Efectivo esperado</span>
+        <span className="font-medium text-right">{pesos(c.esperado)}</span>
+        <span className="text-deep/60">Efectivo contado</span>
+        <span className="font-medium text-right">{pesos(c.contado)}</span>
+        <span className="text-deep/60">Diferencia</span>
+        <span className="text-right">
+          <Diferencia valor={c.diferencia} />
+        </span>
+      </div>
+    </Aviso>
+  );
+};
+
+const TablaMovimientosCaja = ({ movimientos }) =>
+  movimientos.length === 0 ? (
+    <EmptyState text="Todavía no hay movimientos en esta caja." />
+  ) : (
+    <TableWrap>
+      <table className="w-full text-sm">
+        <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+          <tr>
+            <Th>Hora</Th>
+            <Th>Origen</Th>
+            <Th>Rubro</Th>
+            <Th>Medio</Th>
+            <Th className="text-right">Monto</Th>
+            <Th>Usuario</Th>
+            <Th>Observación</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {movimientos.map((m, i) => (
+            <tr key={m.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+              <Td className="whitespace-nowrap">{hora(m.fechaHora)}</Td>
+              <Td>{ORIGENES[m.origen] || m.origen}</Td>
+              <Td>{m.rubro ? RUBROS[m.rubro] : "—"}</Td>
+              <Td>{MEDIOS[m.medioPago] || m.medioPago}</Td>
+              <Td className={`text-right font-medium whitespace-nowrap ${m.tipo === "egreso" ? "text-red-700" : "text-deep"}`}>
+                {m.tipo === "egreso" ? "−" : "+"} {pesos(m.monto)}
+              </Td>
+              <Td>{m.usuario}</Td>
+              <Td className="text-deep/60">{m.observacion || (m.ventaId ? `Venta ${m.ventaId}` : "—")}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
+  );
+
+const TotalesCaja = ({ totales, saldoInicial }) => (
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    {[
+      ["Saldo inicial", saldoInicial],
+      ["Ventas en efectivo", totales.ventasEfectivo],
+      ["Devoluciones en efectivo", totales.devolucionesEfectivo],
+      ["Ingresos manuales", totales.ingresosEfectivo],
+      ["Egresos manuales", totales.egresosEfectivo],
+      ["Transferencias", totales.totalTransferencia],
+      ["Billeteras virtuales", totales.totalBilletera],
+      ["Efectivo esperado", totales.efectivoEsperado],
+    ].map(([etiqueta, valor]) => (
+      <Card key={etiqueta} className={`p-4 ${etiqueta === "Efectivo esperado" ? "ring-2 ring-institutional/40" : ""}`}>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-deep/45">{etiqueta}</p>
+        <p className="text-lg font-display font-bold text-deep">{pesos(valor)}</p>
+      </Card>
+    ))}
+  </div>
+);
+
+const CorreccionCierreModal = ({ sesion, onClose, onHecho }) => {
+  const [contado, setContado] = useState(sesion ? String(sesion.efectivoContado ?? "") : "");
+  const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  if (!sesion) return null;
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    const r = await pedirApi(`/api/caja/sesiones/${sesion.id}/correccion`, { method: "POST", body: { efectivoContado: Number(contado), motivo } });
+    setEnviando(false);
+    if (!r.ok) return setError(mensajeDeError(r));
+    onHecho("Cierre corregido. Queda en la auditoría con el valor anterior y el nuevo.");
+  };
+  return (
+    <Modal open onClose={onClose} title={`Corregir el cierre del ${fmtDate(sesion.cerradaAt)}`}>
+      <form onSubmit={enviar} className="space-y-4">
+        <p className="text-sm text-deep/60">
+          Esperado: <span className="font-medium text-deep">{pesos(sesion.efectivoEsperado)}</span> · Contado: <span className="font-medium text-deep">{pesos(sesion.efectivoContado)}</span>
+        </p>
+        <Field label="Efectivo contado corregido">
+          <input type="number" min="0" step="0.01" required value={contado} onChange={(e) => setContado(e.target.value)} className={inputClass} />
+        </Field>
+        <Field label="Motivo">
+          <textarea required maxLength={500} rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} />
+        </Field>
+        {error && <Aviso>{error}</Aviso>}
+        <div className="flex gap-2 justify-end">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={enviando}>
+            {enviando ? "Guardando…" : "Guardar corrección"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+const DetalleSesionModal = ({ id, onClose }) => {
+  const [sesion, setSesion] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    if (!id) return;
+    setSesion(null);
+    pedirApi(`/api/caja/sesiones/${id}`).then((r) => (r.ok ? setSesion(r.data) : setError(mensajeDeError(r))));
+  }, [id]);
+  if (!id) return null;
+  return (
+    <Modal open wide onClose={onClose} title={`Caja del ${sesion ? fmtDate(sesion.abiertaAt) : "…"}`}>
+      {error && <Aviso>{error}</Aviso>}
+      {sesion && (
+        <div className="space-y-4">
+          <p className="text-sm text-deep/60">
+            Abierta a las {hora(sesion.abiertaAt)} por {sesion.usuarioApertura}
+            {sesion.cerradaAt && ` · cerrada a las ${hora(sesion.cerradaAt)} por ${sesion.usuarioCierre}`}
+          </p>
+          {sesion.totales && <TotalesCaja totales={sesion.totales} saldoInicial={sesion.saldoInicial} />}
+          {sesion.estado === "cerrada" && (
+            <p className="text-sm">
+              Contado: <span className="font-medium">{pesos(sesion.efectivoContado)}</span> · <Diferencia valor={sesion.diferencia} />
+            </p>
+          )}
+          {sesion.correccion && (
+            <Aviso tipo="info">
+              Corregido el {fmtDateTime(sesion.correccion.fecha)} por {sesion.correccion.usuario}: {sesion.correccion.motivo}
+            </Aviso>
+          )}
+          <TablaMovimientosCaja movimientos={sesion.movimientos} />
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+const CajaApiTab = ({ showToast }) => {
+  const dueno = esDueno();
+  const [carga, setCarga] = useState({ cargando: true, caja: null, error: null });
+  const [historial, setHistorial] = useState([]);
+  const [cierreReciente, setCierreReciente] = useState(null);
+  const [verId, setVerId] = useState(null);
+  const [corrigiendo, setCorrigiendo] = useState(null);
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+
+  const cargar = async () => {
+    const r = await pedirApi("/api/caja/actual");
+    if (r.status === 204) setCarga({ cargando: false, caja: null, error: null });
+    else if (r.ok) setCarga({ cargando: false, caja: r.data, error: null });
+    else setCarga({ cargando: false, caja: null, error: mensajeDeError(r) });
+    const filtros = dueno ? `?tamano=50${desde ? `&desde=${desde}` : ""}${hasta ? `&hasta=${hasta}` : ""}` : "";
+    const h = await pedirApi("/api/caja/sesiones" + filtros);
+    if (h.ok) setHistorial(h.data.sesiones);
+  };
+  useEffect(() => {
+    cargar();
+  }, [desde, hasta]);
+
+  const { caja } = carga;
 
   return (
     <div>
-      <SectionBar eyebrowNumber={EYEBROWS.ventas.n} eyebrow={EYEBROWS.ventas.label} title="Ventas presenciales" description="Actualiza el stock de la sucursal automáticamente." />
-      <Card className="p-6 mb-8">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-3">
-            {lineas.map((l, idx) => (
-              <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_100px_140px_auto] gap-3 items-end">
-                <Field label="Producto">
-                  <select
-                    value={l.productoId}
-                    onChange={(e) => {
-                      const p = GFDB.find("productos", Number(e.target.value));
-                      setLinea(idx, { productoId: e.target.value, precio: p ? p.precio : 0 });
-                    }}
-                    className={inputClass}
-                  >
-                    {productos.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Cantidad">
-                  <input type="number" min="1" value={l.cantidad} onChange={(e) => setLinea(idx, { cantidad: e.target.value })} className={inputClass} />
-                </Field>
-                <Field label="Precio unit.">
-                  <input type="number" min="0" value={l.precio} onChange={(e) => setLinea(idx, { precio: e.target.value })} className={inputClass} />
-                </Field>
-                {lineas.length > 1 && (
-                  <Button type="button" variant="ghost" onClick={() => removeLinea(idx)}>
-                    Quitar
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-          <Button type="button" variant="secondary" onClick={addLinea}>
-            <PlusIcon /> Agregar producto
-          </Button>
-
-          <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-deep/8">
-            <Field label="Medio de pago">
-              <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)} className={inputClass}>
-                {window.GF_ENUMS.medio_pago.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="flex flex-col justify-end">
-              <p className="text-xs font-semibold uppercase tracking-wide text-deep/50 mb-1.5">Total</p>
-              <p className="text-2xl font-display font-bold text-deep">{money(total)}</p>
-            </div>
-          </div>
-
-          <p className="text-xs text-deep/40">Se registra a nombre de {session.nombre}, {fmtDateTime(GFDB.nowISO())}.</p>
-          <Button type="submit">Registrar venta</Button>
-        </form>
-      </Card>
-
-      <h2 className="font-display font-bold text-lg text-deep mb-3">Historial de ventas de mi sucursal</h2>
-      <ListToolbar onExport={() => exportCSV("ventas.csv", columns, ventas)} onPrint={() => window.print()} />
-      <FiltersBar
-        filters={[
-          {
-            label: "Medio de pago",
-            value: medioFiltro,
-            onChange: setMedioFiltro,
-            options: [{ value: "todos", label: "Todos los medios" }, ...window.GF_ENUMS.medio_pago],
-          },
-        ]}
+      <SectionBar
+        eyebrowNumber={EYEBROWS.caja.n}
+        eyebrow={EYEBROWS.caja.label}
+        title="Caja"
+        description={dueno ? "Apertura, movimientos, cierre e historial de la caja del local." : "Apertura, gastos e ingresos y cierre de la caja del local."}
       />
-      <DataTable columns={columns} rows={ventas} getRowId={(v) => v.id} searchPlaceholder="Buscar usuario…" />
+      {carga.cargando && <p className="text-sm text-deep/50">Cargando la caja…</p>}
+      {carga.error && <Aviso className="mb-6">{carga.error}</Aviso>}
+      {cierreReciente && !caja && <ResultadoCierre sesion={cierreReciente} />}
+
+      {!carga.cargando && !carga.error && !caja && (
+        <Card className="p-6 mb-8">
+          <p className="font-semibold text-deep mb-1">La caja está cerrada.</p>
+          <p className="text-sm text-deep/55 mb-4">Abrila con el efectivo que hay al empezar para registrar ventas en el local.</p>
+          <AbrirCajaForm
+            showToast={showToast}
+            onHecho={() => {
+              setCierreReciente(null);
+              cargar();
+            }}
+          />
+        </Card>
+      )}
+
+      {caja && (
+        <>
+          <Card className="p-6 mb-6">
+            <div className="flex flex-wrap items-center gap-3 mb-1">
+              <Pill color="verde">Abierta</Pill>
+              {caja.olvidada && <Pill color="ambar">Abierta hace más de 24 horas</Pill>}
+              <p className="text-sm text-deep/60">
+                Desde el {fmtDateTime(caja.abiertaAt)}, por {caja.usuarioApertura}. Saldo inicial: <span className="font-medium text-deep">{pesos(caja.saldoInicial)}</span>
+              </p>
+            </div>
+            {!dueno && <p className="text-xs text-deep/45 mt-2">Caja a ciegas: los totales y el efectivo esperado se ven después del cierre.</p>}
+          </Card>
+          {dueno && caja.totales && <TotalesCaja totales={caja.totales} saldoInicial={caja.saldoInicial} />}
+
+          <div className="grid xl:grid-cols-2 gap-6 mb-8">
+            <Card className="p-6">
+              <h2 className="font-display font-bold text-lg text-deep mb-1">Registrar un gasto o ingreso</h2>
+              <p className="text-sm text-deep/55 mb-4">
+                {dueno ? "Para corregir un error, registrá un movimiento contrario." : "Los retiros y los pagos a la fábrica los registra el dueño."}
+              </p>
+              <MovimientoCajaForm dueno={dueno} showToast={showToast} onHecho={cargar} />
+            </Card>
+            <Card className="p-6">
+              <h2 className="font-display font-bold text-lg text-deep mb-3">Cerrar la caja</h2>
+              <CerrarCajaForm
+                dueno={dueno}
+                esperado={caja.totales?.efectivoEsperado}
+                onCerrada={(s) => {
+                  setCierreReciente(s);
+                  showToast("Caja cerrada.");
+                  cargar();
+                }}
+              />
+            </Card>
+          </div>
+
+          <h2 className="font-display font-bold text-lg text-deep mb-3">{dueno ? "Movimientos de la caja abierta" : "Mis gastos e ingresos de esta caja"}</h2>
+          <div className="mb-8">
+            <TablaMovimientosCaja movimientos={caja.movimientos} />
+          </div>
+        </>
+      )}
+
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+        <h2 className="font-display font-bold text-lg text-deep">{dueno ? "Historial de cajas" : "Cajas de hoy"}</h2>
+        {dueno && (
+          <div className="flex gap-2">
+            <Field label="Desde">
+              <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className={inputClass} />
+            </Field>
+            <Field label="Hasta">
+              <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className={inputClass} />
+            </Field>
+          </div>
+        )}
+      </div>
+      {historial.length === 0 ? (
+        <EmptyState text="No hay cajas para mostrar." />
+      ) : (
+        <TableWrap>
+          <table className="w-full text-sm">
+            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+              <tr>
+                <Th>Apertura</Th>
+                <Th>Cierre</Th>
+                <Th>Estado</Th>
+                <Th className="text-right">Saldo inicial</Th>
+                <Th className="text-right">Esperado</Th>
+                <Th className="text-right">Contado</Th>
+                <Th>Diferencia</Th>
+                {dueno && <Th></Th>}
+              </tr>
+            </thead>
+            <tbody>
+              {historial.map((s, i) => {
+                const c = datosCierre(s);
+                const cerrada = s.estado === "cerrada";
+                return (
+                  <tr key={s.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                    <Td className="whitespace-nowrap">{fmtDateTime(s.abiertaAt)}</Td>
+                    <Td className="whitespace-nowrap">{cerrada ? fmtDateTime(c.cerradaAt) : "—"}</Td>
+                    <Td>
+                      <span className="inline-flex flex-wrap gap-1">
+                        {cerrada ? <Pill>Cerrada</Pill> : <Pill color="verde">Abierta</Pill>}
+                        {s.olvidada && <Pill color="ambar">Olvidada</Pill>}
+                        {s.corregida && <Pill color="ambar">Corregida</Pill>}
+                      </span>
+                    </Td>
+                    <Td className="text-right whitespace-nowrap">{pesos(s.saldoInicial)}</Td>
+                    <Td className="text-right whitespace-nowrap">{cerrada ? pesos(c.esperado) : "—"}</Td>
+                    <Td className="text-right whitespace-nowrap">{cerrada ? pesos(c.contado) : "—"}</Td>
+                    <Td>{cerrada ? <Diferencia valor={c.diferencia} /> : "—"}</Td>
+                    {dueno && (
+                      <Td className="whitespace-nowrap text-right">
+                        <MiniButton variant="secondary" onClick={() => setVerId(s.id)}>
+                          Ver
+                        </MiniButton>{" "}
+                        {cerrada && (
+                          <MiniButton variant="secondary" onClick={() => setCorrigiendo(s)}>
+                            Corregir
+                          </MiniButton>
+                        )}
+                      </Td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
+      <DetalleSesionModal id={verId} onClose={() => setVerId(null)} />
+      {corrigiendo && (
+        <CorreccionCierreModal
+          sesion={corrigiendo}
+          onClose={() => setCorrigiendo(null)}
+          onHecho={(msg) => {
+            setCorrigiendo(null);
+            showToast(msg);
+            cargar();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+/* ---------- Nueva venta ---------- */
+
+const BuscadorCliente = ({ cliente, onElegir }) => {
+  const [q, setQ] = useState("");
+  const [resultados, setResultados] = useState([]);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    if (q.trim().length < 2) {
+      setResultados([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const r = await pedirApi(`/api/clientes?activo=true&tamano=8&q=${encodeURIComponent(q.trim())}`);
+      if (r.ok) {
+        setResultados(r.data.clientes);
+        setError(null);
+      } else setError(mensajeDeError(r));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  if (cliente)
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-institutional/40 bg-institutional/5 px-3.5 py-2.5 text-sm">
+        <span>
+          <span className="font-semibold">{cliente.nombre}</span>
+          {cliente.documentoNumero && <span className="text-deep/50"> · {cliente.documentoNumero}</span>}
+        </span>
+        <button type="button" className="text-deep/50 hover:text-deep text-xs font-semibold" onClick={() => onElegir(null)}>
+          Quitar
+        </button>
+      </div>
+    );
+  return (
+    <div className="relative">
+      <input value={q} onChange={(e) => setQ(e.target.value)} className={inputClass} placeholder="Consumidor final, o buscá un cliente…" />
+      {error && <p className="text-xs text-red-700 mt-1">{error}</p>}
+      {resultados.length > 0 && (
+        <div className="absolute z-10 mt-1 w-full bg-white rounded-xl border border-deep/10 shadow-lg py-1 max-h-64 overflow-y-auto">
+          {resultados.map((c) => (
+            <button
+              type="button"
+              key={c.id}
+              onClick={() => {
+                onElegir(c);
+                setQ("");
+                setResultados([]);
+              }}
+              className="w-full text-left px-3.5 py-2 text-sm hover:bg-institutional/10"
+            >
+              <span className="font-medium">{c.nombre}</span>
+              {c.documentoNumero && <span className="text-deep/50"> · {c.documentoNumero}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {q.trim().length >= 2 && resultados.length === 0 && !error && <p className="text-xs text-deep/45 mt-1">Sin resultados.</p>}
+    </div>
+  );
+};
+
+const VentaRegistrada = ({ venta, onNueva }) => (
+  <Card className="p-6 mb-8 border-institutional/40">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p className="flex items-center gap-2 font-semibold text-institutional">
+          <CheckIcon /> Venta registrada
+        </p>
+        <p className="text-3xl font-display font-bold text-deep mt-1">{pesos(venta.total)}</p>
+        <p className="text-sm text-deep/60 mt-1">
+          Comprobante {venta.comprobante.letra} {venta.comprobante.numero} · {MEDIOS[venta.medioPago]}
+          {venta.cliente ? ` · ${venta.cliente.nombre}` : " · Consumidor final"}
+          {Number(venta.descuento) > 0 && ` · descuento ${cantidadTexto(venta.porcentajeDescuento)} % (${pesos(venta.descuento)})`}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={() => abrirImprimible(venta.comprobante.id)}>
+          <PrinterIcon /> Ver comprobante para imprimir
+        </Button>
+        <Button type="button" variant="secondary" onClick={onNueva}>
+          <PlusIcon /> Nueva venta
+        </Button>
+      </div>
+    </div>
+    <div className="mt-4">
+    <TableWrap>
+      <table className="w-full text-sm">
+        <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+          <tr>
+            <Th>Artículo</Th>
+            <Th className="text-right">Cantidad</Th>
+            <Th className="text-right">Precio</Th>
+            <Th className="text-right">Subtotal</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {venta.renglones.map((l) => (
+            <tr key={l.id}>
+              <Td>{l.articulo}</Td>
+              <Td className="text-right">{cantidadTexto(l.cantidad)}</Td>
+              <Td className="text-right whitespace-nowrap">{pesos(l.precioUnitario)}</Td>
+              <Td className="text-right whitespace-nowrap">{pesos(l.subtotal)}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableWrap>
+    </div>
+  </Card>
+);
+
+const NuevaVentaTab = ({ showToast, onNavigate }) => {
+  const dueno = esDueno();
+  const [precios, setPrecios] = useState([]);
+  const [stock, setStock] = useState({});
+  const [enUnidades, setEnUnidades] = useState({});
+  const [tope, setTope] = useState(null);
+  const [cajaAbierta, setCajaAbierta] = useState(null);
+  const [errorCarga, setErrorCarga] = useState(null);
+  const [busqueda, setBusqueda] = useState("");
+  const [lineas, setLineas] = useState([]);
+  const [cliente, setCliente] = useState(null);
+  const [medioPago, setMedioPago] = useState("efectivo");
+  const [descuento, setDescuento] = useState("");
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const [registrada, setRegistrada] = useState(null);
+
+  const cargar = async () => {
+    const [p, s, c, k] = await Promise.all([
+      pedirApi("/api/precios"),
+      pedirApi("/api/stock"),
+      pedirApi("/api/ambito/condiciones-venta"),
+      pedirApi("/api/caja/actual"),
+    ]);
+    if (!p.ok) return setErrorCarga(mensajeDeError(p));
+    setPrecios(p.data);
+    if (s.ok) {
+      const porArticulo = {};
+      const unidades = {};
+      s.data.forEach((x) => (unidades[x.articuloId] = x.unidadMedida === "unidad"));
+      s.data.filter((x) => x.ubicacionNombre === "Principal").forEach((x) => (porArticulo[x.articuloId] = Number(x.cantidad)));
+      setStock(porArticulo);
+      setEnUnidades(unidades);
+    }
+    if (c.ok) setTope(Number(c.data.descuentoMaximoEmpleado));
+    setCajaAbierta(k.status === 200);
+  };
+  useEffect(() => {
+    cargar();
+  }, []);
+
+  const pct = Number(descuento || 0);
+  const superaTope = !dueno && tope !== null && pct > tope;
+  const unitario = (precio) => redondear2(precio * (1 - pct / 100));
+  const totalEstimado = lineas.reduce((acc, l) => acc + redondear2(unitario(l.precio) * Number(l.cantidad || 0)), 0);
+
+  const visibles = precios
+    .filter((p) => !lineas.some((l) => l.articuloId === p.articuloId))
+    .filter((p) => p.articuloNombre.toLowerCase().includes(busqueda.trim().toLowerCase()))
+    .slice(0, 8);
+
+  const agregar = (p) => {
+    setLineas((prev) => [...prev, { articuloId: p.articuloId, nombre: p.articuloNombre, precio: Number(p.precio), cantidad: "1" }]);
+    setBusqueda("");
+    setRegistrada(null);
+  };
+  const cambiarCantidad = (id, cantidad) => setLineas((prev) => prev.map((l) => (l.articuloId === id ? { ...l, cantidad } : l)));
+  const quitar = (id) => setLineas((prev) => prev.filter((l) => l.articuloId !== id));
+
+  const confirmar = async (e) => {
+    e.preventDefault();
+    if (lineas.length === 0) return setError("Agregá al menos un artículo.");
+    if (superaTope) return setError(`El descuento máximo que podés aplicar en este local es ${cantidadTexto(tope)} %.`);
+    setEnviando(true);
+    setError(null);
+    const body = {
+      clienteId: cliente ? cliente.id : null,
+      medioPago,
+      porcentajeDescuento: pct,
+      renglones: lineas.map((l) => ({ articuloId: l.articuloId, cantidad: Number(l.cantidad) })),
+    };
+    const r = await pedirApi("/api/ventas", { method: "POST", body });
+    setEnviando(false);
+    if (!r.ok) {
+      setError(mensajeDeError(r));
+      if (r.status === 409) cargar();
+      return;
+    }
+    setRegistrada(r.data);
+    setLineas([]);
+    setCliente(null);
+    setDescuento("");
+    setMedioPago("efectivo");
+    showToast(`Venta registrada: ${pesos(r.data.total)}.`);
+    cargar();
+  };
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS.ventas.n}
+        eyebrow={EYEBROWS.ventas.label}
+        title="Nueva venta"
+        description="Venta presencial en el local. Descuenta el stock, emite el comprobante X y, si se cobra en el momento, entra a la caja."
+      />
+      {errorCarga && <Aviso className="mb-6">{errorCarga}</Aviso>}
+      {cajaAbierta === false && (
+        <Aviso tipo="aviso" className="mb-6">
+          <span className="font-semibold">La caja está cerrada.</span> Para registrar una venta, primero abrí la caja.{" "}
+          <button type="button" className="underline font-semibold" onClick={() => onNavigate("caja")}>
+            Ir a Caja
+          </button>
+        </Aviso>
+      )}
+      {registrada && <VentaRegistrada venta={registrada} onNueva={() => setRegistrada(null)} />}
+
+      <form onSubmit={confirmar} className="grid xl:grid-cols-[1fr_380px] gap-6 items-start">
+        <Card className="p-6">
+          <Field label="Buscar artículo">
+            <div className="relative">
+              <SearchIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-deep/40" />
+              <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} className={`${inputClass} pl-10`} placeholder="Nombre del artículo…" />
+            </div>
+          </Field>
+          <div className="mt-3 mb-6 rounded-xl border border-deep/8 divide-y divide-deep/5">
+            {visibles.length === 0 ? (
+              <p className="px-4 py-3 text-sm text-deep/45">{precios.length === 0
+                  ? "No hay artículos con precio en la lista del local."
+                  : busqueda.trim()
+                  ? "Sin resultados."
+                  : "Ya agregaste todos los artículos con precio."}</p>
+            ) : (
+              visibles.map((p) => (
+                <div key={p.articuloId} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <span className="flex-1 min-w-0 truncate font-medium">{p.articuloNombre}</span>
+                  <span className="text-deep/50 whitespace-nowrap">Stock: {stock[p.articuloId] !== undefined ? cantidadTexto(stock[p.articuloId]) : "—"}</span>
+                  <span className="font-semibold whitespace-nowrap w-28 text-right">{pesos(p.precio)}</span>
+                  <MiniButton type="button" onClick={() => agregar(p)}>
+                    Agregar
+                  </MiniButton>
+                </div>
+              ))
+            )}
+          </div>
+
+          <h2 className="font-display font-bold text-lg text-deep mb-3">Artículos de la venta</h2>
+          {lineas.length === 0 ? (
+            <EmptyState text="Todavía no agregaste artículos." />
+          ) : (
+            <TableWrap>
+              <table className="w-full text-sm">
+                <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+                  <tr>
+                    <Th>Artículo</Th>
+                    <Th className="text-right">Precio</Th>
+                    <Th className="w-28">Cantidad</Th>
+                    <Th className="text-right">Subtotal</Th>
+                    <Th></Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lineas.map((l) => {
+                    const disponible = stock[l.articuloId];
+                    const falta = disponible !== undefined && Number(l.cantidad) > disponible;
+                    return (
+                      <tr key={l.articuloId}>
+                        <Td>
+                          <p className="font-medium">{l.nombre}</p>
+                          {falta && <p className="text-xs text-red-700">Hay {cantidadTexto(disponible)} en stock.</p>}
+                        </Td>
+                        <Td className="text-right whitespace-nowrap">
+                          {pct > 0 && <span className="block text-xs text-deep/40 line-through">{pesos(l.precio)}</span>}
+                          {pesos(unitario(l.precio))}
+                        </Td>
+                        <Td>
+                          <input
+                            type="number"
+                            min={enUnidades[l.articuloId] ? "1" : "0.001"}
+                            step={enUnidades[l.articuloId] ? "1" : "any"}
+                            required
+                            value={l.cantidad}
+                            onChange={(e) => cambiarCantidad(l.articuloId, e.target.value)}
+                            className={`${inputClass} py-1.5 ${falta ? "border-red-300" : ""}`}
+                            aria-label={`Cantidad de ${l.nombre}`}
+                          />
+                        </Td>
+                        <Td className="text-right whitespace-nowrap font-medium">{pesos(redondear2(unitario(l.precio) * Number(l.cantidad || 0)))}</Td>
+                        <Td className="text-right">
+                          <button type="button" onClick={() => quitar(l.articuloId)} className="text-deep/40 hover:text-red-600" title="Quitar">
+                            <CloseIcon className="w-4 h-4" />
+                          </button>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
+        </Card>
+
+        <div className="xl:sticky" style={{ top: "calc(var(--gf-barra, 0px) + 5rem)" }}>
+        <Card className="p-6 space-y-4">
+          <Field label="Cliente (opcional)">
+            <BuscadorCliente cliente={cliente} onElegir={setCliente} />
+          </Field>
+          <Field label="Medio de pago">
+            <select value={medioPago} onChange={(e) => setMedioPago(e.target.value)} className={inputClass}>
+              {["efectivo", "transferencia", "billetera_virtual"].map((m) => (
+                <option key={m} value={m}>
+                  {MEDIOS[m]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Descuento (%)">
+            <input type="number" min="0" max="100" step="0.01" value={descuento} onChange={(e) => setDescuento(e.target.value)} className={inputClass} placeholder="0" />
+          </Field>
+          <p className={`text-xs ${superaTope ? "text-red-700 font-semibold" : "text-deep/45"}`}>
+            {dueno
+              ? "Como dueño, podés aplicar cualquier descuento."
+              : tope === null
+              ? ""
+              : superaTope
+              ? `Supera tu tope: podés aplicar hasta ${cantidadTexto(tope)} %.`
+              : `Podés aplicar hasta ${cantidadTexto(tope)} %.`}
+          </p>
+          <div className="border-t border-deep/8 pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-deep/50">Total</p>
+            <p className="text-3xl font-display font-bold text-deep">{pesos(totalEstimado)}</p>
+            <p className="text-xs text-deep/45 mt-1">
+              Precios finales de la lista del local. Si el cliente tiene una lista propia, el sistema usa esa y el total del comprobante puede variar.
+            </p>
+          </div>
+          {error && <Aviso>{error}</Aviso>}
+          <Button type="submit" className="w-full" disabled={enviando || lineas.length === 0 || superaTope}>
+            {enviando ? "Registrando…" : "Confirmar venta"}
+          </Button>
+          <p className="text-xs text-deep/40">La venta en cuenta corriente se habilita más adelante.</p>
+        </Card>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+/* ---------- Ventas del día ---------- */
+
+const DetalleVentaModal = ({ id, onClose }) => {
+  const dueno = esDueno();
+  const [venta, setVenta] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    if (!id) return;
+    setVenta(null);
+    setError(null);
+    pedirApi(`/api/ventas/${id}`).then((r) => (r.ok ? setVenta(r.data) : setError(mensajeDeError(r))));
+  }, [id]);
+  if (!id) return null;
+  return (
+    <Modal open wide="xl" onClose={onClose} title={venta ? `Venta ${venta.comprobante.letra} ${venta.comprobante.numero}` : "Venta"}>
+      {error && <Aviso>{error}</Aviso>}
+      {venta && (
+        <div className="space-y-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-deep/60">
+            <EstadoVenta venta={venta} />
+            <span>
+              {fmtDateTime(venta.fechaHora)} · {venta.usuario} · {MEDIOS[venta.medioPago]} · {venta.cliente ? venta.cliente.nombre : "Consumidor final"}
+            </span>
+          </div>
+          <TableWrap>
+            <table className="w-full text-sm">
+              <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+                <tr>
+                  <Th>Artículo</Th>
+                  <Th className="text-right">Cant.</Th>
+                  <Th className="text-right">Devuelto</Th>
+                  <Th className="text-right">Precio</Th>
+                  <Th className="text-right">Subtotal</Th>
+                  {dueno && <Th className="text-right">Costo unit.</Th>}
+                  {dueno && <Th className="text-right">Margen</Th>}
+                </tr>
+              </thead>
+              <tbody>
+                {venta.renglones.map((l) => (
+                  <tr key={l.id}>
+                    <Td>{l.articulo}</Td>
+                    <Td className="text-right">{cantidadTexto(l.cantidad)}</Td>
+                    <Td className="text-right">{Number(l.cantidadDevuelta) > 0 ? cantidadTexto(l.cantidadDevuelta) : "—"}</Td>
+                    <Td className="text-right whitespace-nowrap">{pesos(l.precioUnitario)}</Td>
+                    <Td className="text-right whitespace-nowrap">{pesos(l.subtotal)}</Td>
+                    {dueno && <Td className="text-right whitespace-nowrap">{l.costoUnitario === null ? "Sin costo" : pesos(l.costoUnitario)}</Td>}
+                    {dueno && <Td className="text-right">{porcentajeTexto(l.margen)}</Td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+          <div className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 max-w-sm ml-auto">
+            <span className="text-deep/60">Subtotal</span>
+            <span className="text-right">{pesos(venta.subtotal)}</span>
+            {Number(venta.descuento) > 0 && (
+              <>
+                <span className="text-deep/60">Descuento ({cantidadTexto(venta.porcentajeDescuento)} %)</span>
+                <span className="text-right">− {pesos(venta.descuento)}</span>
+              </>
+            )}
+            <span className="font-semibold">Total</span>
+            <span className="text-right font-bold">{pesos(venta.total)}</span>
+            {Number(venta.totalDevuelto) > 0 && (
+              <>
+                <span className="text-deep/60">Devuelto</span>
+                <span className="text-right">− {pesos(venta.totalDevuelto)}</span>
+              </>
+            )}
+            {dueno && (
+              <>
+                <span className="text-deep/60">Costo total</span>
+                <span className="text-right">{venta.costoTotal === null ? "Sin costo" : pesos(venta.costoTotal)}</span>
+                <span className="text-deep/60">Margen</span>
+                <span className="text-right">{porcentajeTexto(venta.margen)}</span>
+              </>
+            )}
+          </div>
+          {venta.anulacion && (
+            <Aviso tipo="info">
+              Anulada el {fmtDateTime(venta.anulacion.fecha)} por {venta.anulacion.usuario}: {venta.anulacion.motivo}
+            </Aviso>
+          )}
+          {venta.devoluciones.map((d) => (
+            <Aviso key={d.notaCredito.id} tipo="info">
+              Devolución de {pesos(d.total)} el {fmtDateTime(d.fechaHora)} por {d.usuario}: {d.motivo}.{" "}
+              <button type="button" className="underline font-semibold" onClick={() => abrirImprimible(d.notaCredito.id)}>
+                Nota de crédito {d.notaCredito.letra} {d.notaCredito.numero}
+              </button>
+            </Aviso>
+          ))}
+          <Button type="button" variant="secondary" onClick={() => abrirImprimible(venta.comprobante.id)}>
+            <PrinterIcon /> Comprobante para imprimir
+          </Button>
+        </div>
+      )}
+    </Modal>
+  );
+};
+
+const AnularVentaModal = ({ venta, onClose, onHecho }) => {
+  const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const enviar = async (e) => {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    const r = await pedirApi(`/api/ventas/${venta.id}/anular`, { method: "POST", body: { motivo } });
+    setEnviando(false);
+    if (!r.ok) return setError(mensajeDeError(r));
+    onHecho(`Venta anulada. Se devolvió el stock${venta.sesionCajaId ? " y el dinero salió de la caja" : ""}.`);
+  };
+  return (
+    <Modal open onClose={onClose} title={`Anular la venta ${venta.comprobante.numero}`}>
+      <form onSubmit={enviar} className="space-y-4">
+        <p className="text-sm text-deep/60">
+          Se anula el comprobante, vuelve todo el stock y, si se cobró en la caja, se registra la salida de {pesos(venta.total)} en la caja abierta. No
+          se puede deshacer.
+        </p>
+        <Field label="Motivo">
+          <textarea required maxLength={500} rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} />
+        </Field>
+        {error && <Aviso>{error}</Aviso>}
+        <div className="flex gap-2 justify-end">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" variant="danger" disabled={enviando}>
+            {enviando ? "Anulando…" : "Anular venta"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+const DevolverVentaModal = ({ venta, onClose, onHecho }) => {
+  const [cantidades, setCantidades] = useState({});
+  const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const renglones = venta.renglones.filter((l) => Number(l.cantidad) > Number(l.cantidadDevuelta));
+  const total = renglones.reduce((acc, l) => acc + redondear2(Number(cantidades[l.id] || 0) * Number(l.precioUnitario)), 0);
+  const enviar = async (e) => {
+    e.preventDefault();
+    const elegidos = renglones.filter((l) => Number(cantidades[l.id] || 0) > 0).map((l) => ({ detalleVentaId: l.id, cantidad: Number(cantidades[l.id]) }));
+    if (elegidos.length === 0) return setError("Indicá qué cantidad se devuelve de al menos un artículo.");
+    setEnviando(true);
+    setError(null);
+    const r = await pedirApi(`/api/ventas/${venta.id}/devoluciones`, { method: "POST", body: { motivo, renglones: elegidos } });
+    setEnviando(false);
+    if (!r.ok) return setError(mensajeDeError(r));
+    const nc = r.data.devoluciones[r.data.devoluciones.length - 1].notaCredito;
+    onHecho(`Devolución registrada con la nota de crédito ${nc.letra} ${nc.numero}.`, nc.id);
+  };
+  return (
+    <Modal open wide onClose={onClose} title={`Devolver artículos de la venta ${venta.comprobante.numero}`}>
+      <form onSubmit={enviar} className="space-y-4">
+        <TableWrap>
+          <table className="w-full text-sm">
+            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+              <tr>
+                <Th>Artículo</Th>
+                <Th className="text-right">Vendido</Th>
+                <Th className="text-right">Ya devuelto</Th>
+                <Th className="text-right">Precio</Th>
+                <Th className="w-28">Devolver</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {renglones.map((l) => (
+                <tr key={l.id}>
+                  <Td>{l.articulo}</Td>
+                  <Td className="text-right">{cantidadTexto(l.cantidad)}</Td>
+                  <Td className="text-right">{cantidadTexto(l.cantidadDevuelta)}</Td>
+                  <Td className="text-right whitespace-nowrap">{pesos(l.precioUnitario)}</Td>
+                  <Td>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={cantidades[l.id] || ""}
+                      placeholder="0"
+                      onChange={(e) => setCantidades({ ...cantidades, [l.id]: e.target.value })}
+                      className={`${inputClass} py-1.5`}
+                      aria-label={`Cantidad a devolver de ${l.articulo}`}
+                    />
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+        <p className="text-sm">
+          Total a devolver: <span className="font-bold">{pesos(total)}</span>
+          {venta.sesionCajaId && <span className="text-deep/50"> · sale de la caja abierta</span>}
+        </p>
+        <Field label="Motivo">
+          <textarea required maxLength={500} rows={2} value={motivo} onChange={(e) => setMotivo(e.target.value)} className={inputClass} />
+        </Field>
+        {error && <Aviso>{error}</Aviso>}
+        <div className="flex gap-2 justify-end">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={enviando}>
+            {enviando ? "Registrando…" : "Registrar devolución"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+const VentasDelDiaTab = ({ showToast }) => {
+  const dueno = esDueno();
+  const [fecha, setFecha] = useState(hoyISO());
+  const [ventas, setVentas] = useState(null);
+  const [error, setError] = useState(null);
+  const [verId, setVerId] = useState(null);
+  const [anulando, setAnulando] = useState(null);
+  const [devolviendo, setDevolviendo] = useState(null);
+
+  const cargar = async () => {
+    const r = await pedirApi(dueno ? `/api/ventas?desde=${fecha}&hasta=${fecha}&tamano=100` : "/api/ventas?tamano=100");
+    if (r.ok) {
+      setVentas(r.data.ventas);
+      setError(null);
+    } else setError(mensajeDeError(r));
+  };
+  useEffect(() => {
+    cargar();
+  }, [fecha]);
+
+  const confirmadas = (ventas || []).filter((v) => v.estado === "confirmada");
+  const totalDia = confirmadas.reduce((acc, v) => acc + Number(v.total) - Number(v.totalDevuelto), 0);
+
+  const terminar = (mensaje, comprobanteId) => {
+    setAnulando(null);
+    setDevolviendo(null);
+    showToast(mensaje);
+    if (comprobanteId) abrirImprimible(comprobanteId);
+    cargar();
+  };
+
+  return (
+    <div>
+      <SectionBar
+        eyebrowNumber={EYEBROWS["ventas-dia"].n}
+        eyebrow={EYEBROWS["ventas-dia"].label}
+        title={dueno ? "Ventas" : "Ventas del día"}
+        description={dueno ? "Ventas del local por día, con costo y margen. Desde acá se anulan o se registran devoluciones." : "Las ventas de hoy en el local."}
+        action={
+          dueno && (
+            <input type="date" value={fecha} max={hoyISO()} onChange={(e) => setFecha(e.target.value || hoyISO())} className={inputClass} aria-label="Día" />
+          )
+        }
+      />
+      {error && <Aviso className="mb-6">{error}</Aviso>}
+      {ventas && (
+        <div className="grid grid-cols-2 gap-3 mb-6 max-w-xl">
+          <Card className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-deep/45">Ventas confirmadas</p>
+            <p className="text-xl font-display font-bold text-deep">{confirmadas.length}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-deep/45">Total, menos devoluciones</p>
+            <p className="text-xl font-display font-bold text-deep">{pesos(totalDia)}</p>
+          </Card>
+        </div>
+      )}
+      {ventas && ventas.length === 0 && <EmptyState text="No hay ventas en este día." />}
+      {ventas && ventas.length > 0 && (
+        <TableWrap>
+          <table className="w-full text-sm">
+            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
+              <tr>
+                <Th>Hora y vendedor</Th>
+                <Th>Comprobante</Th>
+                <Th>Cliente</Th>
+                <Th>Medio</Th>
+                <Th className="text-right">Total</Th>
+                <Th>Estado</Th>
+                {dueno && <Th className="text-right">Costo y margen</Th>}
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventas.map((v, i) => (
+                <tr key={v.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
+                  <Td>
+                    <span className="font-medium">{hora(v.fechaHora)}</span>
+                    <span className="block text-xs text-deep/50">{v.usuario}</span>
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {v.comprobante.letra} {v.comprobante.numero}
+                  </Td>
+                  <Td>{v.cliente ? v.cliente.nombre : <span className="text-deep/45">Consumidor final</span>}</Td>
+                  <Td>{MEDIOS[v.medioPago]}</Td>
+                  <Td className="text-right whitespace-nowrap">
+                    <span className="font-medium">{pesos(v.total)}</span>
+                    {Number(v.totalDevuelto) > 0 && <span className="block text-xs text-deep/50">Devuelto {pesos(v.totalDevuelto)}</span>}
+                  </Td>
+                  <Td>
+                    <EstadoVenta venta={v} />
+                  </Td>
+                  {dueno && (
+                    <Td className="text-right whitespace-nowrap">
+                      {v.costoTotal === null ? <span className="text-deep/50">Sin costo</span> : pesos(v.costoTotal)}
+                      <span className="block text-xs text-deep/50">Margen {porcentajeTexto(v.margen)}</span>
+                    </Td>
+                  )}
+                  <Td className="text-right">
+                    <span className="flex flex-wrap justify-end gap-1.5 w-[124px] ml-auto">
+                      <MiniButton variant="secondary" onClick={() => setVerId(v.id)}>
+                        Ver
+                      </MiniButton>
+                      <MiniButton variant="secondary" onClick={() => abrirImprimible(v.comprobante.id)} title="Comprobante para imprimir">
+                        <PrinterIcon className="w-3.5 h-3.5" />
+                      </MiniButton>
+                      {dueno && v.estado === "confirmada" && v.renglones.some((l) => Number(l.cantidad) > Number(l.cantidadDevuelta)) && (
+                        <MiniButton variant="secondary" onClick={() => setDevolviendo(v)}>
+                          Devolver
+                        </MiniButton>
+                      )}
+                      {dueno && v.estado === "confirmada" && Number(v.totalDevuelto) === 0 && (
+                        <MiniButton variant="danger" onClick={() => setAnulando(v)}>
+                          Anular
+                        </MiniButton>
+                      )}
+                    </span>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableWrap>
+      )}
+      <DetalleVentaModal id={verId} onClose={() => setVerId(null)} />
+      {anulando && <AnularVentaModal venta={anulando} onClose={() => setAnulando(null)} onHecho={terminar} />}
+      {devolviendo && <DevolverVentaModal venta={devolviendo} onClose={() => setDevolviendo(null)} onHecho={terminar} />}
     </div>
   );
 };
@@ -2064,125 +3259,6 @@ const CatalogoTab = ({ session, bump, showToast }) => {
           );
         })}
       </div>
-    </div>
-  );
-};
-
-/* ---------------------------------------------------------
-   CAJA (responsable)
---------------------------------------------------------- */
-const CajaTab = ({ session, bump, showToast }) => {
-  const hoy = GFDB.fechaHoy();
-  const ventasHoy = GFDB.query("ventas", (v) => v.sucursal_id === session.sucursalId && v.fecha_hora.slice(0, 10) === hoy);
-  const sumaPorMedio = (medio) => ventasHoy.filter((v) => v.medio_pago === medio).reduce((acc, v) => acc + v.total, 0);
-
-  const cierreHoy = GFDB.query("cierres_caja", (c) => c.sucursal_id === session.sucursalId && c.fecha === hoy)[0] || null;
-
-  const [efectivo, setEfectivo] = useState(sumaPorMedio("efectivo"));
-  const [transferencia, setTransferencia] = useState(sumaPorMedio("transferencia"));
-  const [billetera, setBilletera] = useState(sumaPorMedio("billetera_virtual"));
-  const [observaciones, setObservaciones] = useState("");
-
-  const historial = GFDB.query("cierres_caja", (c) => c.sucursal_id === session.sucursalId).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
-
-  const cerrar = (e) => {
-    e.preventDefault();
-    GFDB.cerrarCaja({
-      sucursalId: session.sucursalId,
-      usuarioId: session.usuarioId,
-      fecha: hoy,
-      totalEfectivo: Number(efectivo),
-      totalTransferencia: Number(transferencia),
-      totalBilletera: Number(billetera),
-      observaciones,
-    });
-    bump();
-    showToast("Caja cerrada correctamente.");
-  };
-
-  return (
-    <div>
-      <SectionBar eyebrowNumber={EYEBROWS.caja.n} eyebrow={EYEBROWS.caja.label} title="Caja" description="El cierre de esta sucursal no es visible para otras sucursales ni para fábrica." />
-
-      <h2 className="font-display font-bold text-lg text-deep mb-3">Ingresos de hoy ({fmtDate(hoy)})</h2>
-      <div className="grid grid-cols-3 gap-4 mb-8 max-w-xl">
-        {window.GF_ENUMS.medio_pago.map((m) => (
-          <Card key={m.value} className="p-4 text-center">
-            <p className="text-xs text-deep/50">{m.label}</p>
-            <p className="text-lg font-display font-bold text-deep">{money(sumaPorMedio(m.value))}</p>
-          </Card>
-        ))}
-      </div>
-
-      {cierreHoy ? (
-        <Card className="p-6 max-w-xl mb-8">
-          <p className="text-sm font-semibold text-institutional mb-3">La caja de hoy ya está cerrada.</p>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <p className="text-deep/60">Efectivo</p>
-            <p className="text-right font-medium">{money(cierreHoy.total_efectivo)}</p>
-            <p className="text-deep/60">Transferencia</p>
-            <p className="text-right font-medium">{money(cierreHoy.total_transferencia)}</p>
-            <p className="text-deep/60">Billetera virtual</p>
-            <p className="text-right font-medium">{money(cierreHoy.total_billetera)}</p>
-            <p className="text-deep font-semibold">Total general</p>
-            <p className="text-right font-bold">{money(cierreHoy.total_general)}</p>
-          </div>
-          {cierreHoy.observaciones && <p className="text-xs text-deep/50 mt-3">Obs: {cierreHoy.observaciones}</p>}
-        </Card>
-      ) : (
-        <Card className="p-6 max-w-xl mb-8">
-          <form onSubmit={cerrar} className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
-              <Field label="Efectivo">
-                <input type="number" value={efectivo} onChange={(e) => setEfectivo(e.target.value)} className={inputClass} />
-              </Field>
-              <Field label="Transferencia">
-                <input type="number" value={transferencia} onChange={(e) => setTransferencia(e.target.value)} className={inputClass} />
-              </Field>
-              <Field label="Billetera virtual">
-                <input type="number" value={billetera} onChange={(e) => setBilletera(e.target.value)} className={inputClass} />
-              </Field>
-            </div>
-            <p className="text-sm text-deep/70">
-              Total general: <span className="font-bold text-deep">{money(Number(efectivo) + Number(transferencia) + Number(billetera))}</span>
-            </p>
-            <Field label="Observaciones (diferencias o aclaraciones)">
-              <textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} rows={2} className={inputClass} />
-            </Field>
-            <Button type="submit">Cerrar caja del día</Button>
-          </form>
-        </Card>
-      )}
-
-      <h2 className="font-display font-bold text-lg text-deep mb-3">Historial de cierres de mi sucursal</h2>
-      {historial.length === 0 ? (
-        <EmptyState text="Todavía no hay cierres de caja registrados." />
-      ) : (
-        <TableWrap>
-          <table className="w-full text-sm">
-            <thead className="bg-institutional/10 text-deep/70 text-xs uppercase">
-              <tr>
-                <th className="text-left px-4 py-3">Fecha</th>
-                <th className="text-left px-4 py-3">Efectivo</th>
-                <th className="text-left px-4 py-3">Transferencia</th>
-                <th className="text-left px-4 py-3">Billetera</th>
-                <th className="text-left px-4 py-3">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historial.map((c, i) => (
-                <tr key={c.id} className={i % 2 === 1 ? "bg-deep/[0.025]" : ""}>
-                  <td className="px-4 py-3 border-t border-deep/5 whitespace-nowrap">{fmtDate(c.fecha)}</td>
-                  <td className="px-4 py-3 border-t border-deep/5">{money(c.total_efectivo)}</td>
-                  <td className="px-4 py-3 border-t border-deep/5">{money(c.total_transferencia)}</td>
-                  <td className="px-4 py-3 border-t border-deep/5">{money(c.total_billetera)}</td>
-                  <td className="px-4 py-3 border-t border-deep/5 font-medium">{money(c.total_general)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </TableWrap>
-      )}
     </div>
   );
 };
@@ -3341,7 +4417,7 @@ const IntegracionesTab = ({ session }) => {
 --------------------------------------------------------- */
 const SucursalApp = () => {
   const [session] = useState(() => GFAuth.requireRole(["empleado_sucursal", "responsable_sucursal"]));
-  const [tab, setTab] = useState(() => (session?.rolNombre === "empleado_sucursal" ? "clientes" : "dashboard"));
+  const [tab, setTab] = useState(() => (session?.rolNombre === "empleado_sucursal" ? "ventas" : "dashboard"));
   const [tick, setTick] = useState(0);
   const [toast, setToast] = useState(null);
 
@@ -3358,14 +4434,16 @@ const SucursalApp = () => {
   const notifCount = GFDB.query("pedidos", (p) => p.sucursal_id === session.sucursalId && p.estado === "pendiente").length;
 
   let content;
+  let esProximamente = false;
   if (tab === "dashboard") content = <DashboardSucursalTab session={session} onNavigate={setTab} />;
   else if (tab === "stock") content = <StockTab session={session} />;
   else if (tab === "ingreso") content = <IngresoTab session={session} bump={bump} showToast={showToast} />;
   else if (tab === "pedidos") content = <PedidosTab session={session} bump={bump} showToast={showToast} />;
-  else if (tab === "ventas") content = <VentasTab session={session} bump={bump} showToast={showToast} />;
+  else if (tab === "ventas") content = <NuevaVentaTab showToast={showToast} onNavigate={setTab} />;
+  else if (tab === "ventas-dia") content = <VentasDelDiaTab showToast={showToast} />;
+  else if (tab === "caja") content = <CajaApiTab showToast={showToast} />;
   else if (tab === "ajuste" && session.rolNombre === "responsable_sucursal") content = <AjusteTab session={session} bump={bump} showToast={showToast} />;
   else if (tab === "catalogo" && session.rolNombre === "responsable_sucursal") content = <CatalogoTab session={session} bump={bump} showToast={showToast} />;
-  else if (tab === "caja" && session.rolNombre === "responsable_sucursal") content = <CajaTab session={session} bump={bump} showToast={showToast} />;
   else if (tab === "catalogo-consulta") content = <CatalogoConsultaTab session={session} />;
   else if (tab === "transferencias") content = <TransferenciasTab session={session} bump={bump} showToast={showToast} />;
   else if (tab === "venta-facturas" && session.rolNombre === "responsable_sucursal")
@@ -3394,6 +4472,7 @@ const SucursalApp = () => {
   else if (tab === "config-integraciones" && session.rolNombre === "responsable_sucursal") content = <IntegracionesTab session={session} />;
   else if (session.rolNombre === "responsable_sucursal" && CAJA_PLACEHOLDER_ITEMS.some((it) => it.key === tab)) {
     const it = CAJA_PLACEHOLDER_ITEMS.find((i) => i.key === tab);
+    esProximamente = true;
     content = (
       <ProximamenteTab
         eyebrowNumber={EYEBROWS[tab].n}
@@ -3404,6 +4483,7 @@ const SucursalApp = () => {
     );
   } else if (session.rolNombre === "responsable_sucursal" && CONTABILIDAD_ITEMS.some((it) => it.key === tab)) {
     const it = CONTABILIDAD_ITEMS.find((i) => i.key === tab);
+    esProximamente = true;
     content = (
       <ProximamenteTab
         eyebrowNumber={EYEBROWS[tab].n}
@@ -3414,6 +4494,7 @@ const SucursalApp = () => {
     );
   } else if (session.rolNombre === "responsable_sucursal" && ["config-emails", "config-leyendas", "config-reportes"].includes(tab)) {
     const it = CONFIG_ITEMS.find((i) => i.key === tab);
+    esProximamente = true;
     content = <ProximamenteTab eyebrowNumber={EYEBROWS[tab].n} eyebrow={EYEBROWS[tab].label} titulo={it.label} />;
   } else if (session.rolNombre === "empleado_sucursal") content = <ClientesTab bump={bump} showToast={showToast} />;
   else content = <DashboardSucursalTab session={session} onNavigate={setTab} />;
@@ -3426,8 +4507,10 @@ const SucursalApp = () => {
       activeKey={tab}
       onNavigate={setTab}
       notifCount={notifCount}
+      notifTitle="Pedidos pendientes (datos de prueba)"
       onLogout={GFAuth.logout}
     >
+      {!PANTALLAS_CONECTADAS.includes(tab) && !esProximamente && <AvisoDatosDePrueba />}
       {content}
       <Toast message={toast?.message} kind={toast?.kind} onClose={() => setToast(null)} />
     </PrivateShell>
@@ -3439,7 +4522,15 @@ ReactDOM.createRoot(document.getElementById("root")).render(<SucursalApp />);
 
 <script>
   // Primero se valida la sesión contra la API (shared/auth.js); sin sesión, al login.
-  GFAuth.arrancar(["dueno_local", "empleado_local"], function () {
+  GFAuth.arrancar(["dueno_local", "empleado_local"], function (sesion) {
+    // La sesión real (perfil y ámbito) la usan las pantallas conectadas a la API.
+    window.GF_SESION_REAL = sesion;
+    var barra = document.getElementById("gf-barra-sesion");
+    var medirBarra = function () {
+      document.documentElement.style.setProperty("--gf-barra", (barra ? barra.offsetHeight : 0) + "px");
+    };
+    medirBarra();
+    if (barra && window.ResizeObserver) new ResizeObserver(medirBarra).observe(barra);
     var source = document.getElementById("app-source").textContent;
     try {
       var output = Babel.transform(source, {
