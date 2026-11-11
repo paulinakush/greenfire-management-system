@@ -514,21 +514,29 @@ Table detalle_conteo {
 
 Table clientes {
   id int [pk, increment]
-  nombre varchar
+  ambito_id int [note: 'ámbito dueño del cliente: cada local tiene sus clientes; la fábrica, los locales y sus mayoristas. Nunca cambia']
+  nombre varchar [note: 'obligatorio, salvo que haya razón social']
   razon_social varchar
-  documento_tipo varchar [note: 'CUIT o DNI']
+  documento_tipo varchar [note: 'cuit (11 dígitos) o dni (7 u 8 dígitos); los dos o ninguno']
   documento_numero varchar
-  condicion_iva condicion_iva
+  condicion_iva condicion_iva [note: 'consumidor_final por defecto']
   telefono varchar
   email varchar
   direccion varchar
-  password_hash varchar [note: 'solo clientes registrados desde la web']
-  lista_precios_id int
-  plazo_pago_dias int
-  ambito_representado_id int [note: 'cuando el cliente es un local que le compra a la fábrica']
+  cuenta_corriente_habilitada boolean [note: 'solo con documento; siempre true en los clientes que representan a un local']
+  limite_credito decimal [note: 'opcional, no negativo; null es sin límite; siempre null en los clientes que representan a un local']
+  lista_precios_id int [note: 'una lista del mismo ámbito del cliente']
+  plazo_pago_dias int [note: 'opcional, no negativo']
+  ambito_representado_id int [note: 'el local que representa, cuando es cliente de la fábrica; lo crea la base, uno por local, con los datos del local y de su entidad fiscal']
   activo boolean
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (ambito_id, documento_tipo, documento_numero) [unique, note: 'índice parcial: solo con documento y sin los que representan a un local (dos locales pueden compartir entidad fiscal)']
+    ambito_representado_id [unique, note: 'índice parcial: un cliente por local']
+  }
+  note: 'Las cuentas web de los clientes van en una tabla aparte (etapa posterior). Ningún cliente se borra: se desactiva.'
 }
 
 Table pedidos {
@@ -993,6 +1001,7 @@ Ref: conteos_stock.usuario_id > usuarios.id
 Ref: detalle_conteo.conteo_id > conteos_stock.id
 Ref: detalle_conteo.articulo_id > articulos.id
 
+Ref: clientes.ambito_id > ambitos.id
 Ref: clientes.lista_precios_id > listas_precios.id
 Ref: clientes.ambito_representado_id > ambitos.id
 Ref: pedidos.cliente_id > clientes.id

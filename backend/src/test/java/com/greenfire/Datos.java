@@ -31,6 +31,8 @@ import com.greenfire.catalogo.CostoArticulo;
 import com.greenfire.catalogo.CostoArticuloRepository;
 import com.greenfire.catalogo.TipoArticulo;
 import com.greenfire.catalogo.UnidadMedida;
+import com.greenfire.clientes.Cliente;
+import com.greenfire.clientes.ClienteRepository;
 import com.greenfire.fiscal.CondicionIva;
 import com.greenfire.fiscal.EntidadFiscal;
 import com.greenfire.fiscal.EntidadFiscalRepository;
@@ -70,13 +72,14 @@ public class Datos {
     private final ListaPreciosRepository listas;
     private final ListaPreciosItemRepository precios;
     private final UbicacionStockRepository ubicaciones;
+    private final ClienteRepository clientes;
     private final JdbcTemplate jdbc;
 
     public Datos(EntidadFiscalRepository entidades, AmbitoRepository ambitos, UsuarioRepository usuarios,
             UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones,
             CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos,
             ListaPreciosRepository listas, ListaPreciosItemRepository precios, UbicacionStockRepository ubicaciones,
-            JdbcTemplate jdbc) {
+            ClienteRepository clientes, JdbcTemplate jdbc) {
         this.entidades = entidades;
         this.ambitos = ambitos;
         this.usuarios = usuarios;
@@ -88,6 +91,7 @@ public class Datos {
         this.listas = listas;
         this.precios = precios;
         this.ubicaciones = ubicaciones;
+        this.clientes = clientes;
         this.jdbc = jdbc;
     }
 
@@ -208,6 +212,22 @@ public class Datos {
         return jdbc.query("select cantidad_actual from stock_articulos where articulo_id = ? and ubicacion_stock_id = ?",
                 rs -> rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO.setScale(3), articulo.getId(),
                 ubicacion.getId());
+    }
+
+    // --- Clientes ---
+
+    /** Cliente activo del ámbito, consumidor final, sin documento ni cuenta corriente. */
+    public Cliente cliente(Ambito ambito, String nombre) {
+        Cliente c = new Cliente();
+        c.setAmbito(ambito);
+        c.setNombre(nombre);
+        return clientes.save(c);
+    }
+
+    /** El cliente de la fábrica que representa al local, creado por la base. */
+    public Cliente clienteDelLocal(Ambito local) {
+        clientes.flush();
+        return clientes.findByAmbitoRepresentadoId(local.getId()).orElseThrow();
     }
 
     // --- Usuarios ---
