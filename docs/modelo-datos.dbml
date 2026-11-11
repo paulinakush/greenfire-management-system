@@ -166,6 +166,21 @@ Enum tipo_movimiento_caja {
   egreso
 }
 
+Enum origen_movimiento_caja {
+  manual [note: 'ingreso o egreso cargado a mano, con rubro']
+  venta
+  cobranza
+  devolucion [note: 'devolución o anulación de una venta']
+}
+
+Enum rubro_caja {
+  gasto
+  retiro
+  aporte
+  pago_fabrica
+  otro
+}
+
 Enum tipo_compra {
   insumos_produccion
   mercaderia_reventa
@@ -781,37 +796,49 @@ Table detalle_cobranza {
 
 Table sesiones_caja {
   id int [pk, increment]
-  ambito_id int
+  ambito_id int [note: 'solo locales: la fábrica no tiene caja']
   usuario_apertura_id int
   usuario_cierre_id int
   abierta_at datetime
   cerrada_at datetime
   saldo_inicial decimal
-  total_efectivo decimal
-  total_transferencia decimal
-  total_billetera decimal
-  total_general decimal
-  efectivo_esperado decimal
+  total_efectivo decimal [note: 'cobros netos en efectivo: ventas + cobranzas - devoluciones']
+  total_transferencia decimal [note: 'cobros netos por transferencia; no suman al efectivo']
+  total_billetera decimal [note: 'cobros netos por billetera virtual; no suman al efectivo']
+  total_general decimal [note: 'suma de los tres totales por medio']
+  ingresos_efectivo decimal [note: 'movimientos manuales de ingreso en efectivo']
+  egresos_efectivo decimal [note: 'movimientos manuales de egreso en efectivo']
+  efectivo_esperado decimal [note: 'saldo inicial + total_efectivo + ingresos_efectivo - egresos_efectivo']
   efectivo_contado decimal
-  diferencia decimal
-  estado estado_caja [note: 'una vez cerrada, solo un usuario autorizado la modifica y queda en auditoría']
-  observaciones text
+  diferencia decimal [note: 'efectivo contado - efectivo esperado']
+  estado estado_caja [note: 'abierta pasa a cerrada, una vez; después solo cambia por la corrección autorizada']
+  observaciones text [note: 'del cierre']
+  corregida_por_usuario_id int [note: 'corrección autorizada del cierre: solo cambia el efectivo contado y la diferencia']
+  corregida_at datetime
+  motivo_correccion text [note: 'obligatorio al corregir']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    ambito_id [unique, note: 'índice parcial: una sola sesión abierta por local']
+  }
 }
 
 Table movimientos_caja {
   id int [pk, increment]
-  sesion_caja_id int
+  sesion_caja_id int [note: 'una sesión abierta']
   usuario_id int
-  tipo tipo_movimiento_caja
-  rubro varchar [note: 'gasto del local, retiro, aporte, etc.']
-  medio_pago medio_pago
-  monto decimal
+  origen origen_movimiento_caja [note: 'las ventas, cobranzas y devoluciones suman su referencia (venta_id, cobranza_id) con sus módulos']
+  tipo tipo_movimiento_caja [note: 'venta y cobranza son ingresos; devolucion, egreso']
+  rubro rubro_caja [note: 'solo en los manuales, y obligatorio; gasto, retiro y pago_fabrica son egresos y aporte es ingreso, salvo en una corrección']
+  medio_pago medio_pago [note: 'efectivo, transferencia o billetera_virtual; nunca cuenta_corriente']
+  monto decimal [note: 'mayor que cero; el tipo da el signo']
   fecha_hora datetime
-  observacion text
+  observacion text [note: 'obligatoria en los manuales']
+  corrige_movimiento_id int [note: 'movimiento manual contrario que corrige un error: misma sesión, rubro y medio, tipo opuesto, sin pasar el monto original']
   created_at datetime
   updated_at datetime
+  note: 'Solo de inserción: no se modifica ni se borra.'
 }
 
 // ---------------------------------------------------------------------------
@@ -1081,6 +1108,8 @@ Ref: sesiones_caja.usuario_apertura_id > usuarios.id
 Ref: sesiones_caja.usuario_cierre_id > usuarios.id
 Ref: movimientos_caja.sesion_caja_id > sesiones_caja.id
 Ref: movimientos_caja.usuario_id > usuarios.id
+Ref: movimientos_caja.corrige_movimiento_id > movimientos_caja.id
+Ref: sesiones_caja.corregida_por_usuario_id > usuarios.id
 
 Ref: proveedores.ambito_id > ambitos.id
 Ref: proveedores.ambito_representado_id > ambitos.id

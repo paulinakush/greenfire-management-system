@@ -549,3 +549,11 @@ Reglas generales, iguales a las de las etapas 1 y 2:
   - Se usa la misma regla en el movimiento de cuenta corriente y en la migración de las entregas viejas.
   - Tests con las cuatro combinaciones de condición de la fábrica y del local.
 - **Bloquea:** el uso de las entregas en producción, no el resto de la etapa.
+
+## 10. Para revisar
+
+### 10.1 Visibilidad de los comprobantes (módulo 3)
+
+- **Hoy:** cada dueño ve los comprobantes de la entidad fiscal de su ámbito activo. Si dos locales compartieran entidad, el dueño de uno vería los del otro.
+- **Decidido al aprobar el módulo 3:** la visibilidad se filtra por el ámbito que emitió el comprobante (el ámbito de su punto de venta). La regla 3 de `CLAUDE.md` ("nadie accede a datos de otro local") prevalece sobre "la entidad de su ámbito".
+- **Cuándo:** arreglarlo antes de cargar datos reales.

@@ -74,7 +74,7 @@ public class ManejadorErrores {
      * stock_articulos_sin_negativo, ver V6) responde igual que {@code StockInsuficienteException}. Dos conteos
      * abiertos a la vez en una ubicación los frena el índice uq_conteos_stock_abierto (V7). El local central lo
      * cuidan ambitos_central_valido y uq_ambitos_central (V8), y la recepción de una entrega,
-     * detalle_entregas_recibida_no_mayor (V9).
+     * detalle_entregas_recibida_no_mayor (V9), y una sola caja abierta por local, uq_sesiones_caja_abierta (V13).
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ApiError> integridad(DataIntegrityViolationException e) {
@@ -91,6 +91,9 @@ public class ManejadorErrores {
         if (causa != null && causa.contains("ambitos_central_valido")) {
             return respuesta(HttpStatus.CONFLICT,
                     "El local central tiene que ser un local activo y visible en la web.", null);
+        }
+        if (causa != null && causa.contains("uq_sesiones_caja_abierta")) {
+            return respuesta(HttpStatus.CONFLICT, "Ya hay una caja abierta en este local.", null);
         }
         if (causa != null && causa.contains("uq_ambitos_central")) {
             return respuesta(HttpStatus.CONFLICT, "Ya hay otro local central.", null);

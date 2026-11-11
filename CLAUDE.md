@@ -19,7 +19,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 ## Backend
 
 - Java 21, Spring Boot 3.4.x, Maven (usar `./mvnw`), PostgreSQL 16 y Flyway.
-- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`, `clientes`, `comprobantes`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
+- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`, `clientes`, `comprobantes`, `caja`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
 - Código, tablas y endpoints en español, sin tildes ni eñes en los identificadores (`dueno_local`, `ambitos`).
 
 ### Base de datos
@@ -122,6 +122,15 @@ cd backend && ./mvnw test
 - La numeración es correlativa por punto de venta, tipo y letra, sin huecos: `NumeradorComprobantes` bloquea la fila de `punto_venta_comprobantes` (`SELECT ... FOR UPDATE`) y avanza `ultimo_numero`. Si la operación se revierte, el número no se consume. La base lo garantiza (V12).
 - Un comprobante emitido no se modifica ni se borra: solo pasa a `anulado`, una vez. Los datos del emisor y del receptor se copian al emitir.
 - Cada dueño ve los comprobantes de la entidad fiscal de su ámbito; el empleado, solo los de su local; el administrador técnico, ninguno (403).
+
+## Decisiones de caja (etapa 3)
+
+- Solo los locales tienen caja, con una sola sesión abierta por local (índice único parcial `uq_sesiones_caja_abierta`; la segunda apertura responde 409).
+- Efectivo esperado = saldo inicial + ventas y cobranzas en efectivo - devoluciones en efectivo + ingresos manuales en efectivo - egresos manuales en efectivo. Transferencias y billeteras virtuales se totalizan aparte.
+- Los movimientos de caja son solo de inserción. Un error se corrige con un movimiento manual contrario (`corrige_movimiento_id`), del mismo rubro y medio, que no supere al original.
+- Las ventas y cobranzas entran a la caja solo por `CajaService.exigirAbierta` y `CajaService.registrarCobro` (propagación MANDATORY), que bloquean la sesión: un cierre y un movimiento simultáneos se ordenan por ese bloqueo.
+- Caja a ciegas: el empleado no ve totales ni esperado mientras la caja está abierta. No registra retiros ni pagos a la fábrica, y no corrige cierres.
+- Después del cierre, la base solo admite la corrección del dueño de local (efectivo contado y diferencia, con motivo). Una caja abierta hace más de 24 horas se marca como olvidada para el dueño, sin cerrarse sola.
 
 ## Forma de trabajo
 
