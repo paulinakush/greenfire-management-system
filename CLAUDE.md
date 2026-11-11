@@ -81,6 +81,7 @@ cd backend && ./mvnw test
 8. La fábrica y cada local son entidades fiscales independientes, con su CUIT, condición frente al IVA y puntos de venta. El tipo de comprobante depende de la condición del emisor y del receptor.
 9. Se registra en auditoría, con usuario, perfil, ámbito, acción y fecha, toda operación sensible: confirmar o rechazar pedidos, ventas, anulaciones, cierres de caja, compras, producción y ajustes de stock.
 10. Nunca se borran usuarios, productos, clientes ni proveedores: se desactivan para conservar el historial.
+11. La fábrica no vende al público minorista: de eso se encargan los locales. Le vende a los locales (entregas) y, con su Línea Jardinería, al por mayor a paisajistas, viveros y growshops, que la contactan para coordinar la venta. Esas ventas las registran solo los dueños de la fábrica, y los mayoristas no hacen pedidos por la web.
 
 ## Decisiones de usuarios y acceso
 

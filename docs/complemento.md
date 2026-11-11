@@ -21,14 +21,14 @@ Hay tres perfiles de acceso. Cada uno tiene su propia interfaz y solo ve los dat
 | Función | Dueño de fábrica | Dueño de local | Empleado de local |
 | --- | --- | --- | --- |
 | Ámbito de datos | La fábrica, y el local central si es dueño | Su local | Solo el local donde trabaja |
-| Ventas presenciales y pedidos online | No aplica | Ver y gestionar | Registrar ventas, confirmar o rechazar pedidos y actualizar su estado |
-| Anular ventas y devoluciones | No aplica | Sí | No: lo solicita al dueño |
+| Ventas presenciales y pedidos online | Ventas al por mayor de la Línea Jardinería a paisajistas, viveros y growshops; no hace ventas minoristas ni pedidos online | Ver y gestionar | Registrar ventas, confirmar o rechazar pedidos y actualizar su estado |
+| Anular ventas y devoluciones | Sí, de sus ventas mayoristas | Sí | No: lo solicita al dueño |
 | Caja | No ve la de los locales | Abre, cierra y consulta todo el historial | Abre y cierra su turno; ve solo la caja del día |
 | Costos y márgenes | Sí | Sí | No |
-| Precios y catálogo | Lista de precios para locales y productos de fábrica | Precios y catálogo de su local | No |
+| Precios y catálogo | Listas de precios para locales y mayorista, y productos de fábrica | Precios y catálogo de su local | No |
 | Stock | Fábrica: insumos y producto terminado | Consulta y ajustes con motivo | Solo consulta, y registrar la recepción de mercadería |
 | Cuenta corriente con la fábrica | Ve el saldo de cada local y registra cobranzas | Ve su saldo y registra pagos | No |
-| Cuentas corrientes de clientes | No aplica | Sí | Registrar cobranzas y ver el saldo |
+| Cuentas corrientes de clientes | De sus mayoristas | Sí | Registrar cobranzas y ver el saldo |
 | Compras y proveedores | Insumos de producción | Compras de su local | No |
 | Producción | Sí | No | No |
 | Reportes | De la fábrica | De su local | Solo el resumen del día |
