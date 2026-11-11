@@ -15,7 +15,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 public class DatosConfirmados {
 
-    private static final List<String> TABLAS = List.of("movimientos_stock", "detalle_entregas", "entregas",
+    private static final List<String> TABLAS = List.of("detalle_comprobante", "comprobantes", "punto_venta_comprobantes",
+            "puntos_venta", "clientes", "movimientos_stock", "detalle_entregas", "entregas",
             "detalle_conteo", "conteos_stock", "stock_articulos", "ubicaciones_stock", "costos_articulo",
             "historial_precios", "lista_precios_items", "listas_precios", "articulos", "categorias", "auditorias",
             "usuario_ambitos", "usuarios", "ambitos", "entidades_fiscales");

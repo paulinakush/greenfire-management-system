@@ -60,6 +60,48 @@ class PuntoVentaApiTest {
     }
 
     @Test
+    void losTiposXNuevosSeAdmitenParaCualquierCondicion() throws Exception {
+        for (CondicionIva condicion : CondicionIva.values()) {
+            Ambito local = datos.ambito(TipoAmbito.local, "Local " + condicion, condicion);
+            mvc.perform(json(post("/api/admin/puntos-venta"), datos.admin(), cuerpo(local.getId(), 1,
+                    "{\"tipo\":\"comprobante_venta\",\"letra\":\"X\"},{\"tipo\":\"nota_credito\",\"letra\":\"X\"},"
+                            + "{\"tipo\":\"nota_debito\",\"letra\":\"X\"}")))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.comprobantes[*].tipo")
+                            .value(containsInAnyOrder("comprobante_venta", "nota_credito", "nota_debito")));
+        }
+    }
+
+    @Test
+    void elComprobanteDeVentaEsSoloXYLaFacturaNuncaEsX() throws Exception {
+        Ambito local = datos.ambito(TipoAmbito.local, "Ruta", CondicionIva.responsable_inscripto);
+
+        for (String letra : new String[] {"A", "B", "C"}) {
+            mvc.perform(json(post("/api/admin/puntos-venta"), datos.admin(), cuerpo(local.getId(), 1,
+                    "{\"tipo\":\"comprobante_venta\",\"letra\":\"" + letra + "\"}")))
+                    .andExpect(status().isConflict());
+        }
+        mvc.perform(json(post("/api/admin/puntos-venta"), datos.admin(),
+                cuerpo(local.getId(), 1, "{\"tipo\":\"factura\",\"letra\":\"X\"}")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void lasNotasDeCreditoYDebitoFiscalesSiguenLaCondicionDelEmisor() throws Exception {
+        Ambito local = datos.local("Centro"); // monotributo: solo C
+
+        mvc.perform(json(post("/api/admin/puntos-venta"), datos.admin(),
+                cuerpo(local.getId(), 1, "{\"tipo\":\"nota_debito\",\"letra\":\"A\"}")))
+                .andExpect(status().isConflict());
+        mvc.perform(json(post("/api/admin/puntos-venta"), datos.admin(),
+                cuerpo(local.getId(), 1, "{\"tipo\":\"nota_credito\",\"letra\":\"B\"}")))
+                .andExpect(status().isConflict());
+        mvc.perform(json(post("/api/admin/puntos-venta"), datos.admin(), cuerpo(local.getId(), 1,
+                "{\"tipo\":\"nota_credito\",\"letra\":\"C\"},{\"tipo\":\"nota_debito\",\"letra\":\"C\"}")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void elNumeroEsUnicoDentroDeCadaEntidadFiscal() throws Exception {
         Ambito centro = datos.local("Centro");
         Ambito norte = datos.local("Norte");

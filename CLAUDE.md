@@ -19,7 +19,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 ## Backend
 
 - Java 21, Spring Boot 3.4.x, Maven (usar `./mvnw`), PostgreSQL 16 y Flyway.
-- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`, `clientes`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
+- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`, `clientes`, `comprobantes`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
 - Código, tablas y endpoints en español, sin tildes ni eñes en los identificadores (`dueno_local`, `ambitos`).
 
 ### Base de datos
@@ -114,6 +114,14 @@ cd backend && ./mvnw test
 - **Las entregas de la fábrica a los locales se construyen en la etapa 2, pero no se usan en producción hasta la etapa 3.** Recién entonces generan la cuenta corriente (la deuda del local) y el remito; hasta ahí, solo con datos de prueba.
 - Estados: `enviada`, `recibida`, `diferencia_informada` y `anulada`. La base solo admite pasar de `enviada` a uno de los otros tres, y resolver una diferencia una sola vez.
 - Al confirmar la recepción, el costo del producto en el local pasa a ser el precio unitario de la entrega, tal cual, sin ajustes de IVA. El tratamiento del IVA en ese costo queda para confirmar con el contador en la etapa 3.
+
+## Decisiones de comprobantes (etapa 3)
+
+- En la etapa 3 todos los comprobantes son X (no fiscales), con la leyenda "Documento no válido como factura". Las facturas quedan para la etapa 6, con ARCA.
+- No hay alta directa por la API: los emite solo `comprobantes.EmisorComprobantes`, llamado por las ventas, las entregas y las cobranzas dentro de su transacción.
+- La numeración es correlativa por punto de venta, tipo y letra, sin huecos: `NumeradorComprobantes` bloquea la fila de `punto_venta_comprobantes` (`SELECT ... FOR UPDATE`) y avanza `ultimo_numero`. Si la operación se revierte, el número no se consume. La base lo garantiza (V12).
+- Un comprobante emitido no se modifica ni se borra: solo pasa a `anulado`, una vez. Los datos del emisor y del receptor se copian al emitir.
+- Cada dueño ve los comprobantes de la entidad fiscal de su ámbito; el empleado, solo los de su local; el administrador técnico, ninguno (403).
 
 ## Forma de trabajo
 

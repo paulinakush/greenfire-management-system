@@ -6,7 +6,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.boot.test.context.TestComponent;
@@ -36,6 +38,11 @@ import com.greenfire.clientes.ClienteRepository;
 import com.greenfire.fiscal.CondicionIva;
 import com.greenfire.fiscal.EntidadFiscal;
 import com.greenfire.fiscal.EntidadFiscalRepository;
+import com.greenfire.fiscal.ComprobantePermitido;
+import com.greenfire.fiscal.LetraComprobante;
+import com.greenfire.fiscal.PuntoVenta;
+import com.greenfire.fiscal.PuntoVentaRepository;
+import com.greenfire.fiscal.TipoComprobante;
 import com.greenfire.precios.ListaPrecios;
 import com.greenfire.precios.ListaPreciosItem;
 import com.greenfire.precios.ListaPreciosItemRepository;
@@ -73,13 +80,14 @@ public class Datos {
     private final ListaPreciosItemRepository precios;
     private final UbicacionStockRepository ubicaciones;
     private final ClienteRepository clientes;
+    private final PuntoVentaRepository puntosVenta;
     private final JdbcTemplate jdbc;
 
     public Datos(EntidadFiscalRepository entidades, AmbitoRepository ambitos, UsuarioRepository usuarios,
             UsuarioAmbitoRepository perfiles, FindByIndexNameSessionRepository<? extends Session> sesiones,
             CategoriaRepository categorias, ArticuloRepository articulos, CostoArticuloRepository costos,
             ListaPreciosRepository listas, ListaPreciosItemRepository precios, UbicacionStockRepository ubicaciones,
-            ClienteRepository clientes, JdbcTemplate jdbc) {
+            ClienteRepository clientes, PuntoVentaRepository puntosVenta, JdbcTemplate jdbc) {
         this.entidades = entidades;
         this.ambitos = ambitos;
         this.usuarios = usuarios;
@@ -92,6 +100,7 @@ public class Datos {
         this.precios = precios;
         this.ubicaciones = ubicaciones;
         this.clientes = clientes;
+        this.puntosVenta = puntosVenta;
         this.jdbc = jdbc;
     }
 
@@ -138,6 +147,24 @@ public class Datos {
 
     public Ambito fabrica() {
         return ambito(TipoAmbito.fabrica, "Fábrica", CondicionIva.responsable_inscripto);
+    }
+
+    /** Punto de venta activo del ámbito, con el número indicado, que emite los tipos indicados en letra X. */
+    public PuntoVenta puntoVentaX(Ambito ambito, int numero, TipoComprobante... tipos) {
+        PuntoVenta p = new PuntoVenta();
+        p.setAmbito(ambito);
+        p.setNumero(numero);
+        p.setDescripcion("Punto de venta X de prueba");
+        p.setComprobantes(Arrays.stream(tipos).map(t -> new ComprobantePermitido(t, LetraComprobante.X))
+                .collect(Collectors.toSet()));
+        return puntosVenta.saveAndFlush(p);
+    }
+
+    /** Punto de venta número 1 del ámbito, con todos los tipos X. */
+    public PuntoVenta puntoVentaX(Ambito ambito) {
+        return puntoVentaX(ambito, 1, TipoComprobante.comprobante_venta, TipoComprobante.nota_credito,
+                TipoComprobante.nota_debito, TipoComprobante.remito, TipoComprobante.recibo,
+                TipoComprobante.presupuesto);
     }
 
     // --- Catálogo ---

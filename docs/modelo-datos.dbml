@@ -111,9 +111,11 @@ Enum estado_venta {
 Enum tipo_comprobante {
   factura
   nota_credito
+  nota_debito
   remito
   recibo
   presupuesto
+  comprobante_venta [note: 'comprobante simple de una venta, solo letra X']
 }
 
 Enum letra_comprobante {
@@ -241,9 +243,10 @@ Table punto_venta_comprobantes {
   punto_venta_id int
   tipo tipo_comprobante
   letra letra_comprobante
+  ultimo_numero int [note: 'último número emitido de ese tipo y letra en el punto de venta; se toma con SELECT ... FOR UPDATE al emitir, sin huecos']
   created_at datetime
   updated_at datetime
-  note: 'Tipos de comprobante que puede emitir cada punto de venta según la condición fiscal de su entidad.'
+  note: 'Tipos de comprobante que puede emitir cada punto de venta según la condición fiscal de su entidad. comprobante_venta solo en letra X y factura nunca en X.'
 
   indexes {
     (punto_venta_id, tipo, letra) [unique]
@@ -623,18 +626,30 @@ Table comprobantes {
   tipo tipo_comprobante
   letra letra_comprobante
   punto_venta_id int [note: 'define la entidad emisora y el ámbito']
-  numero int
-  cliente_id int
+  numero int [note: 'correlativo por punto de venta, tipo y letra, sin huecos']
+  emisor_razon_social varchar [note: 'datos del emisor (entidad fiscal y ámbito) copiados al emitir']
+  emisor_cuit varchar
+  emisor_condicion_iva condicion_iva [note: 'decide si el comprobante discrimina IVA']
+  emisor_domicilio_fiscal varchar
+  emisor_nombre varchar [note: 'nombre del ámbito: la fábrica o el local']
+  emisor_direccion varchar
+  cliente_id int [note: 'del ámbito del punto de venta; null para un consumidor final sin identificar']
   receptor_razon_social varchar [note: 'datos del receptor copiados al emitir']
+  receptor_documento_tipo varchar [note: 'cuit o dni, como en clientes']
   receptor_documento varchar
   receptor_condicion_iva condicion_iva
+  receptor_domicilio varchar
   usuario_id int
   fecha datetime
   fecha_vencimiento date
-  estado estado_comprobante
-  comprobante_asociado_id int [note: 'factura o remito que corrige una nota de crédito']
-  neto decimal
-  iva decimal
+  estado estado_comprobante [note: 'emitido pasa a anulado, una vez; nada más cambia y no se borra']
+  anulado_por_usuario_id int
+  anulado_at datetime
+  motivo_anulacion text
+  comprobante_asociado_id int [note: 'comprobante de la misma entidad que corrige una nota de crédito o de débito']
+  precios_con_iva boolean [note: 'si los precios del detalle incluyen IVA; siempre true si el emisor no discrimina IVA']
+  neto decimal [note: 'igual al total si el emisor no discrimina IVA']
+  iva decimal [note: '0 si el emisor no discrimina IVA']
   total decimal
   arca_estado arca_estado [note: 'null en comprobantes no fiscales']
   cae varchar
@@ -651,14 +666,15 @@ Table comprobantes {
 Table detalle_comprobante {
   id int [pk, increment]
   comprobante_id int
-  articulo_id int
-  descripcion varchar
+  articulo_id int [note: 'opcional: un recibo o un ajuste no llevan artículo']
+  descripcion varchar [note: 'copiada al emitir']
   cantidad decimal
-  precio_unitario decimal
+  precio_unitario decimal [note: 'con o sin IVA según comprobantes.precios_con_iva']
   alicuota_iva decimal
-  subtotal decimal
+  subtotal decimal [note: 'cantidad por precio unitario, redondeado a centavos']
   created_at datetime
   updated_at datetime
+  note: 'Se carga al emitir, en la misma transacción que el comprobante; después no cambia ni se borra.'
 }
 
 // ---------------------------------------------------------------------------

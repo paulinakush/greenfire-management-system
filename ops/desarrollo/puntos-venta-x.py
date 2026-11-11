@@ -14,8 +14,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# Los tipos X que existen hoy. Cuando el módulo 3 sume comprobante_venta (y la nota de crédito X), se agregan acá.
-TIPOS_X = ["presupuesto", "recibo", "remito"]
+# Los tipos X que usan los módulos de la etapa 3 (ver docs/plan-etapa-3.md, punto 6).
+TIPOS_X = ["comprobante_venta", "nota_credito", "nota_debito", "presupuesto", "recibo", "remito"]
 DESCRIPCION = "Punto de venta X (desarrollo)"
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

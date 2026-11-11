@@ -72,8 +72,13 @@ public class PuntoVenta extends EntidadBase {
         return comprobantes;
     }
 
+    /**
+     * Quita los que ya no van y suma los nuevos, sin tocar los que quedan: así sus filas (con el último número
+     * emitido) no se borran y se vuelven a crear. Si un tipo se quita y se vuelve a agregar, la base retoma su
+     * numeración desde el último comprobante emitido (V12).
+     */
     public void setComprobantes(Set<ComprobantePermitido> comprobantes) {
-        this.comprobantes.clear();
+        this.comprobantes.retainAll(comprobantes);
         this.comprobantes.addAll(comprobantes);
     }
 }
