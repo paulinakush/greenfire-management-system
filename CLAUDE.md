@@ -13,6 +13,8 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 - `index.html`, `assets/`, `img/`: sitio público.
 - `privado/`: interfaces internas. Hoy usan datos de prueba en `privado/shared/db.js` (modelo viejo, pendiente de conectar a la API).
 - `backend/`: API Spring Boot, que además sirve el front como archivos estáticos (solo `/`, `/index.html`, `/assets/**`, `/img/**` y `/privado/**`).
+- `ops/backups/`: scripts de backup, restauración y prueba de restauración, configurados por variables de entorno (`BACKUP_*` en `.env.example`). Procedimiento en `docs/backups.md`. Sus tests: `ops/backups/tests/probar-scripts.sh` (usan un PostgreSQL descartable en Docker).
+- `ops/desarrollo/`: cargas para la base de desarrollo, solo contra `localhost`.
 
 ## Backend
 
