@@ -175,7 +175,7 @@ public class CajaService {
             throw new ReglaNegocioException("La corrección supera lo que queda por corregir del movimiento.");
         }
         return MovimientoCajaResponse.de(guardar(caja, OrigenMovimientoCaja.manual, tipo, rubro, medio, monto,
-                req.observacion().trim(), original, sesion.usuarioId()));
+                req.observacion().trim(), original, null, sesion.usuarioId()));
     }
 
     /**
@@ -289,11 +289,12 @@ public class CajaService {
 
     /**
      * El movimiento de caja de una venta, una cobranza o una devolución (el tipo sale del origen), en la sesión que
-     * devolvió {@link #exigirAbierta}. Una venta a cuenta corriente no pasa por la caja: no se llama.
+     * devolvió {@link #exigirAbierta}. {@code ventaId} es la venta cobrada o devuelta (null en una cobranza). Una
+     * venta a cuenta corriente no pasa por la caja: no se llama.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public MovimientoCaja registrarCobro(SesionCaja caja, OrigenMovimientoCaja origen, MedioPago medio,
-            BigDecimal monto, Long usuarioId, String observacion) {
+            BigDecimal monto, Long ventaId, Long usuarioId, String observacion) {
         if (origen == OrigenMovimientoCaja.manual) {
             throw new IllegalArgumentException("Los movimientos manuales se registran con registrarMovimiento.");
         }
@@ -306,16 +307,20 @@ public class CajaService {
         if (!caja.estaAbierta()) {
             throw new ReglaNegocioException(SIN_CAJA);
         }
-        return guardar(caja, origen, origen.tipo(), null, medio, centavos(monto), texto(observacion), null, usuarioId);
+        if (ventaId != null && origen == OrigenMovimientoCaja.cobranza) {
+            throw new IllegalArgumentException("Una cobranza no lleva venta.");
+        }
+        return guardar(caja, origen, origen.tipo(), null, medio, centavos(monto), texto(observacion), null, ventaId,
+                usuarioId);
     }
 
     // --- Ayudas ---
 
     private MovimientoCaja guardar(SesionCaja caja, OrigenMovimientoCaja origen, TipoMovimientoCaja tipo,
             RubroCaja rubro, MedioPago medio, BigDecimal monto, String observacion, MovimientoCaja original,
-            Long usuarioId) {
+            Long ventaId, Long usuarioId) {
         MovimientoCaja m = movimientos.saveAndFlush(new MovimientoCaja(caja, usuarios.getReferenceById(usuarioId),
-                origen, tipo, rubro, medio, monto, observacion, original));
+                origen, tipo, rubro, medio, monto, observacion, original, ventaId));
         Map<String, Object> detalle = new LinkedHashMap<>();
         detalle.put("sesionCajaId", caja.getId());
         detalle.put("origen", origen);
@@ -325,6 +330,7 @@ public class CajaService {
         detalle.put("monto", monto);
         detalle.put("observacion", observacion);
         detalle.put("corrigeMovimientoId", original == null ? null : original.getId());
+        detalle.put("ventaId", ventaId);
         auditor.registrar("registrar_movimiento", MOVIMIENTO, m.getId(), List.of(caja.getAmbito().getId()), detalle);
         return m;
     }

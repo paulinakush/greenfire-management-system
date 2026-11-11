@@ -232,6 +232,7 @@ Table ambitos {
   horarios varchar
   visible_web boolean [note: 'los locales que aparecen en "Sucursales" y se pueden elegir en un pedido']
   es_central boolean [note: 'el local que el catálogo público usa por defecto: a lo sumo uno, y tiene que ser un local activo y visible en la web. Lo cambia solo el administrador técnico']
+  descuento_maximo_empleado decimal [note: 'porcentaje de 0 a 100, 0 por defecto: el descuento máximo que el empleado aplica en una venta. Solo tiene sentido en los locales; lo edita el dueño de local, con auditoría']
   activo boolean
   created_at datetime
   updated_at datetime
@@ -468,10 +469,10 @@ Table movimientos_stock {
   usuario_id int
   fecha_hora datetime
   motivo varchar [note: 'obligatorio cuando tipo = ajuste']
-  venta_id int [note: 'se agrega en la etapa 3']
+  venta_id int [note: 'obligatorio si tipo = venta; anulacion y devolucion llevan venta_id o entrega_id, uno solo y nunca los dos. En una venta, de la ubicación y el artículo de un renglón: la venta resta, la anulación y la devolución suman']
   pedido_id int [note: 'se agrega en la etapa 3']
   compra_id int [note: 'se agrega en la etapa 4']
-  entrega_id int [note: 'obligatorio si y solo si tipo es entrega_salida, entrega_recepcion, anulacion o devolucion; salida, anulación y devolución en la ubicación de origen, recepción en la de destino']
+  entrega_id int [note: 'obligatorio si tipo es entrega_salida o entrega_recepcion; en anulacion y devolucion, entrega_id o venta_id, uno solo. Salida, anulación y devolución en la ubicación de origen, recepción en la de destino']
   conteo_id int [note: 'obligatorio si y solo si tipo = conteo; de un conteo de la misma ubicación']
   observaciones text
   created_at datetime
@@ -605,35 +606,76 @@ Table pedido_historial {
 
 Table ventas {
   id int [pk, increment]
-  ambito_id int
+  ambito_id int [note: 'un local (venta presencial) o la fábrica (venta a un mayorista)']
   usuario_id int
-  cliente_id int [note: 'opcional en ventas de mostrador']
-  pedido_id int [note: 'cuando la venta concreta un pedido online']
-  sesion_caja_id int
+  cliente_id int [note: 'del mismo ámbito; opcional en un local, obligatorio en la fábrica; nunca el cliente que representa a un local (eso es una entrega)']
+  pedido_id int [note: 'cuando la venta concreta un pedido online; se agrega con los pedidos (módulo 9)']
+  sesion_caja_id int [note: 'la caja abierta del local al vender, si el medio no es cuenta corriente; null en la fábrica, que no tiene caja']
   fecha_hora datetime
-  medio_pago medio_pago
-  subtotal decimal
-  descuento decimal
-  total decimal
-  estado estado_venta
-  comprobante_id int [note: 'opcional: null si la venta no tiene comprobante fiscal']
+  medio_pago medio_pago [note: 'cuenta_corriente se habilita con el módulo 7']
+  fecha_cobro date [note: 'solo en la fábrica, que no tiene caja: la fecha del cobro']
+  subtotal decimal [note: 'suma de los renglones al precio de lista, antes del descuento']
+  porcentaje_descuento decimal [note: 'de 0 a 100, uno por venta; el empleado, hasta descuento_maximo_empleado de su local']
+  descuento decimal [note: 'subtotal - total']
+  total decimal [note: 'suma de los subtotales de los renglones; igual al total del comprobante']
+  estado estado_venta [note: 'nace confirmada y solo pasa a anulada, una vez']
+  comprobante_id int [note: 'el comprobante de la venta, X en la etapa 3 (comprobante_venta) o fiscal desde la etapa 6; uno por venta']
   anulada_por_usuario_id int
   anulada_at datetime
-  motivo_anulacion text
+  motivo_anulacion text [note: 'obligatorio al anular']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    comprobante_id [unique]
+    (ambito_id, fecha_hora)
+  }
+  note: 'Solo de inserción, salvo el paso de confirmada a anulada; no se borra. Una venta con devoluciones no se anula: el resto se devuelve.'
 }
 
 Table detalle_ventas {
   id int [pk, increment]
   venta_id int
-  articulo_id int
-  cantidad decimal
-  precio_unitario decimal
-  costo_unitario decimal [note: 'costo al momento de la venta, para calcular el margen']
-  subtotal decimal
+  articulo_id int [note: 'un producto terminado de la fábrica o la reventa del local; nunca un insumo. En la fábrica, solo productos terminados']
+  ubicacion_stock_id int [note: 'de donde sale el stock, del ámbito de la venta; "Principal" si no se indica']
+  cantidad decimal [note: 'mayor que cero; entera si la unidad es unidad']
+  precio_lista decimal [note: 'precio final de la lista, con IVA si la entidad lo discrimina, antes del descuento']
+  precio_unitario decimal [note: 'precio final del renglón, con el descuento de la venta, redondeado a centavos']
+  alicuota_iva decimal [note: 'copiada del artículo al vender']
+  costo_unitario decimal [note: 'costo del ámbito al momento de la venta, para calcular el margen; null si no tenía']
+  subtotal decimal [note: 'round(cantidad * precio_unitario, 2), igual que en el comprobante']
   created_at datetime
   updated_at datetime
+
+  indexes {
+    (venta_id, articulo_id, ubicacion_stock_id) [unique]
+  }
+  note: 'Solo se inserta, en la misma transacción que la venta; no se modifica ni se borra.'
+}
+
+Table devoluciones_venta {
+  id int [pk, increment]
+  venta_id int [note: 'una venta confirmada']
+  usuario_id int
+  fecha_hora datetime
+  motivo text [note: 'obligatorio']
+  total decimal [note: 'suma de los renglones devueltos; igual al total de la nota de crédito']
+  nota_credito_id int [note: 'nota de crédito X que referencia al comprobante de la venta']
+  sesion_caja_id int [note: 'la caja abierta del local donde se devolvió el dinero; null en la fábrica']
+  created_at datetime
+  updated_at datetime
+  note: 'Devolución parcial de una venta, por renglones. Solo de inserción.'
+}
+
+Table detalle_devoluciones_venta {
+  id int [pk, increment]
+  devolucion_id int
+  detalle_venta_id int [note: 'un renglón de la misma venta']
+  cantidad decimal [note: 'mayor que cero; lo devuelto de un renglón nunca supera lo vendido']
+  subtotal decimal [note: 'round(cantidad * precio_unitario del renglón, 2)']
+  created_at datetime
+  updated_at datetime
+  note: 'Solo de inserción.'
 }
 
 Table comprobantes {
@@ -828,7 +870,7 @@ Table movimientos_caja {
   id int [pk, increment]
   sesion_caja_id int [note: 'una sesión abierta']
   usuario_id int
-  origen origen_movimiento_caja [note: 'las ventas, cobranzas y devoluciones suman su referencia (venta_id, cobranza_id) con sus módulos']
+  origen origen_movimiento_caja [note: 'las ventas y sus devoluciones llevan venta_id; las cobranzas suman cobranza_id con el módulo 7']
   tipo tipo_movimiento_caja [note: 'venta y cobranza son ingresos; devolucion, egreso']
   rubro rubro_caja [note: 'solo en los manuales, y obligatorio; gasto, retiro y pago_fabrica son egresos y aporte es ingreso, salvo en una corrección']
   medio_pago medio_pago [note: 'efectivo, transferencia o billetera_virtual; nunca cuenta_corriente']
@@ -836,6 +878,7 @@ Table movimientos_caja {
   fecha_hora datetime
   observacion text [note: 'obligatoria en los manuales']
   corrige_movimiento_id int [note: 'movimiento manual contrario que corrige un error: misma sesión, rubro y medio, tipo opuesto, sin pasar el monto original']
+  venta_id int [note: 'la venta cobrada o devuelta (origen venta o devolucion), del mismo local que la sesión. La cobranza suma cobranza_id con el módulo 7']
   created_at datetime
   updated_at datetime
   note: 'Solo de inserción: no se modifica ni se borra.'
@@ -1065,6 +1108,13 @@ Ref: ventas.comprobante_id > comprobantes.id
 Ref: ventas.anulada_por_usuario_id > usuarios.id
 Ref: detalle_ventas.venta_id > ventas.id
 Ref: detalle_ventas.articulo_id > articulos.id
+Ref: detalle_ventas.ubicacion_stock_id > ubicaciones_stock.id
+Ref: devoluciones_venta.venta_id > ventas.id
+Ref: devoluciones_venta.usuario_id > usuarios.id
+Ref: devoluciones_venta.nota_credito_id > comprobantes.id
+Ref: devoluciones_venta.sesion_caja_id > sesiones_caja.id
+Ref: detalle_devoluciones_venta.devolucion_id > devoluciones_venta.id
+Ref: detalle_devoluciones_venta.detalle_venta_id > detalle_ventas.id
 Ref: comprobantes.punto_venta_id > puntos_venta.id
 Ref: comprobantes.cliente_id > clientes.id
 Ref: comprobantes.usuario_id > usuarios.id
@@ -1109,6 +1159,7 @@ Ref: sesiones_caja.usuario_cierre_id > usuarios.id
 Ref: movimientos_caja.sesion_caja_id > sesiones_caja.id
 Ref: movimientos_caja.usuario_id > usuarios.id
 Ref: movimientos_caja.corrige_movimiento_id > movimientos_caja.id
+Ref: movimientos_caja.venta_id > ventas.id
 Ref: sesiones_caja.corregida_por_usuario_id > usuarios.id
 
 Ref: proveedores.ambito_id > ambitos.id

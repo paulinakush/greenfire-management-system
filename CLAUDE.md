@@ -19,7 +19,7 @@ Sitio público y sistema de gestión (ventas, pedidos, stock, caja, compras, pro
 ## Backend
 
 - Java 21, Spring Boot 3.4.x, Maven (usar `./mvnw`), PostgreSQL 16 y Flyway.
-- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`, `clientes`, `comprobantes`, `caja`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
+- Paquete raíz `com.greenfire`, con un subpaquete por módulo: `config`, `comun`, `seguridad`, `ambitos`, `fiscal`, `usuarios`, `auditoria`, `catalogo`, `precios`, `stock`, `entregas`, `importacion`, `clientes`, `comprobantes`, `caja`, `ventas`. Cada módulo contiene sus entidades, repositorios, servicios, controladores y DTOs.
 - Código, tablas y endpoints en español, sin tildes ni eñes en los identificadores (`dueno_local`, `ambitos`).
 
 ### Base de datos
@@ -131,6 +131,16 @@ cd backend && ./mvnw test
 - Las ventas y cobranzas entran a la caja solo por `CajaService.exigirAbierta` y `CajaService.registrarCobro` (propagación MANDATORY), que bloquean la sesión: un cierre y un movimiento simultáneos se ordenan por ese bloqueo.
 - Caja a ciegas: el empleado no ve totales ni esperado mientras la caja está abierta. No registra retiros ni pagos a la fábrica, y no corrige cierres.
 - Después del cierre, la base solo admite la corrección del dueño de local (efectivo contado y diferencia, con motivo). Una caja abierta hace más de 24 horas se marca como olvidada para el dueño, sin cerrarse sola.
+
+## Decisiones de ventas (etapa 3)
+
+- Precio: de la lista del cliente o, si no tiene, de la predeterminada del local. En la fábrica, siempre la lista mayorista del cliente (sin ella, 409). Si la entidad discrimina IVA y la lista es sin IVA, se suma el IVA. Cada renglón guarda el precio de lista, el precio final, la alícuota y el costo del ámbito al vender.
+- Descuento: un porcentaje por venta, aplicado al precio unitario y redondeado a 2 decimales por renglón, igual que el comprobante (el total de la venta es el del comprobante). El empleado tiene el tope `ambitos.descuento_maximo_empleado`, que edita el dueño de local; el dueño, ninguno.
+- En un local venden el empleado y el dueño, con cliente opcional y caja abierta. En la fábrica vende solo el dueño, a mayoristas, siempre con cliente (nunca uno que representa a un local) y sin caja, con medio de pago y fecha de cobro. La cuenta corriente responde 409 hasta el módulo 7.
+- Stock, comprobante X y caja, en una sola transacción (`VentaService`): si algo falla, no queda nada ni se consume el número. Orden de bloqueos: venta, sesión de caja, filas de stock, numeración.
+- `ventas`, `detalle_ventas`, `devoluciones_venta` y su detalle son solo de inserción; una venta solo pasa de `confirmada` a `anulada`, una vez y sin devoluciones (V14).
+- Anulación y devolución parcial: solo los dueños, con motivo. Bloquean la venta, devuelven el stock y, si la venta pasó por caja, egresan el dinero de la caja abierta (sin caja, 409). La devolución emite una nota de crédito X asociada al comprobante original.
+- El empleado ve solo las ventas del día de su local, sin costos ni márgenes (`VentaEmpleadoResponse`). El dueño ve costo y margen sobre el precio neto.
 
 ## Forma de trabajo
 

@@ -270,16 +270,16 @@ class CajaApiTest {
         SesionCaja abierta = caja.exigirAbierta(centro.getId());
 
         assertThatThrownBy(() -> caja.registrarCobro(abierta, OrigenMovimientoCaja.venta, MedioPago.cuenta_corriente,
-                BigDecimal.TEN, usuario, null)).isInstanceOf(IllegalArgumentException.class);
+                BigDecimal.TEN, null, usuario, null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> caja.registrarCobro(abierta, OrigenMovimientoCaja.manual, MedioPago.efectivo,
-                BigDecimal.TEN, usuario, null)).isInstanceOf(IllegalArgumentException.class);
+                BigDecimal.TEN, null, usuario, null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> caja.registrarCobro(abierta, OrigenMovimientoCaja.venta, MedioPago.efectivo,
-                BigDecimal.ZERO, usuario, null)).isInstanceOf(IllegalArgumentException.class);
+                BigDecimal.ZERO, null, usuario, null)).isInstanceOf(IllegalArgumentException.class);
 
         MovimientoCaja venta = caja.registrarCobro(abierta, OrigenMovimientoCaja.venta, MedioPago.efectivo,
-                new BigDecimal("12.5"), usuario, "Venta 1");
+                new BigDecimal("12.5"), null, usuario, "Venta 1");
         MovimientoCaja devolucion = caja.registrarCobro(abierta, OrigenMovimientoCaja.devolucion,
-                MedioPago.efectivo, BigDecimal.ONE, usuario, null);
+                MedioPago.efectivo, BigDecimal.ONE, null, usuario, null);
         assertThat(venta.getTipo()).isEqualTo(TipoMovimientoCaja.ingreso);
         assertThat(venta.getMonto()).isEqualByComparingTo("12.50");
         assertThat(devolucion.getTipo()).isEqualTo(TipoMovimientoCaja.egreso);
@@ -419,7 +419,8 @@ class CajaApiTest {
     }
 
     private void cobro(OrigenMovimientoCaja origen, MedioPago medio, String monto) {
-        caja.registrarCobro(caja.exigirAbierta(centro.getId()), origen, medio, new BigDecimal(monto), usuario, null);
+        caja.registrarCobro(caja.exigirAbierta(centro.getId()), origen, medio, new BigDecimal(monto), null, usuario,
+                null);
     }
 
     /** Una sesión de Centro abierta y cerrada hace días, con 100 de saldo y lo mismo contado. */

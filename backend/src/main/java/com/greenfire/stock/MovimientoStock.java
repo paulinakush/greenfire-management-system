@@ -44,12 +44,15 @@ public class MovimientoStock extends EntidadBase {
     @JoinColumn(name = "conteo_id")
     private ConteoStock conteo;
     private Long entregaId;
+    private Long ventaId;
 
     protected MovimientoStock() {
     }
 
     MovimientoStock(Articulo articulo, UbicacionStock ubicacion, TipoMovimientoStock tipo, BigDecimal cantidad,
-            Long loteId, Usuario usuario, String motivo, String observaciones, ConteoStock conteo, Long entregaId) {
+            Long loteId, Usuario usuario, String motivo, String observaciones, ConteoStock conteo, Long entregaId,
+            Long ventaId) {
+        this.ventaId = ventaId;
         this.articulo = articulo;
         this.ubicacion = ubicacion;
         this.tipo = tipo;
@@ -102,6 +105,10 @@ public class MovimientoStock extends EntidadBase {
     /** El conteo que generó el movimiento; null si no es de tipo conteo. */
     public ConteoStock getConteo() {
         return conteo;
+    }
+
+    public Long getVentaId() {
+        return ventaId;
     }
 
     public Long getEntregaId() {

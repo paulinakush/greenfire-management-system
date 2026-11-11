@@ -1,5 +1,7 @@
 package com.greenfire.ambitos;
 
+import java.math.BigDecimal;
+
 import com.greenfire.comun.EntidadBase;
 import com.greenfire.fiscal.EntidadFiscal;
 
@@ -27,6 +29,7 @@ public class Ambito extends EntidadBase {
     private boolean visibleWeb;
     private boolean esCentral;
     private boolean activo = true;
+    private BigDecimal descuentoMaximoEmpleado = new BigDecimal("0.00");
 
     public TipoAmbito getTipo() {
         return tipo;
@@ -106,5 +109,14 @@ public class Ambito extends EntidadBase {
 
     public void setActivo(boolean activo) {
         this.activo = activo;
+    }
+
+    /** Porcentaje máximo de descuento que el empleado aplica en una venta del local (0 a 100). */
+    public BigDecimal getDescuentoMaximoEmpleado() {
+        return descuentoMaximoEmpleado;
+    }
+
+    public void setDescuentoMaximoEmpleado(BigDecimal descuentoMaximoEmpleado) {
+        this.descuentoMaximoEmpleado = descuentoMaximoEmpleado;
     }
 }

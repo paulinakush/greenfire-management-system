@@ -1,5 +1,6 @@
 package com.greenfire.ambitos;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.greenfire.ambitos.dto.AmbitoEdicionAdminRequest;
 import com.greenfire.ambitos.dto.AmbitoRequest;
 import com.greenfire.ambitos.dto.AmbitoResponse;
+import com.greenfire.ambitos.dto.CondicionesVentaRequest;
+import com.greenfire.ambitos.dto.CondicionesVentaResponse;
 import com.greenfire.ambitos.dto.ContactoLocalRequest;
 import com.greenfire.ambitos.dto.LocalPublicoResponse;
 import com.greenfire.auditoria.Auditor;
@@ -160,6 +163,26 @@ public class AmbitoService {
         a.setEmail(c.registrar("email", a.getEmail(), req.email()));
         auditor.registrarCambios("editar_contacto", ENTIDAD, a.getId(), List.of(a.getId()), c);
         return AmbitoResponse.de(a);
+    }
+
+    /** Las condiciones de venta del local: las ven el dueño y el empleado (el empleado, para saber su tope). */
+    @Transactional(readOnly = true)
+    public CondicionesVentaResponse condicionesVenta() {
+        Sesion sesion = acceso.exigirPerfil(Perfil.dueno_local, Perfil.empleado_local);
+        return CondicionesVentaResponse.de(buscar(sesion.ambitoId()));
+    }
+
+    /** El dueño de local fija el descuento máximo del empleado, con auditoría del valor anterior y el nuevo. */
+    public CondicionesVentaResponse editarCondicionesVenta(CondicionesVentaRequest req) {
+        Sesion sesion = acceso.exigirPerfil(Perfil.dueno_local);
+        Ambito a = buscar(sesion.ambitoId());
+        Cambios c = new Cambios();
+        BigDecimal nuevo = req.descuentoMaximoEmpleado().setScale(2);
+        if (a.getDescuentoMaximoEmpleado().compareTo(nuevo) != 0) {
+            a.setDescuentoMaximoEmpleado(c.registrar("descuentoMaximoEmpleado", a.getDescuentoMaximoEmpleado(), nuevo));
+        }
+        auditor.registrarCambios("editar_condiciones_venta", ENTIDAD, a.getId(), List.of(a.getId()), c);
+        return CondicionesVentaResponse.de(a);
     }
 
     // --- Sitio público ---

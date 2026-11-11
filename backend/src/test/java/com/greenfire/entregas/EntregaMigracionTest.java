@@ -221,7 +221,7 @@ class EntregaMigracionTest {
                 insert into movimientos_stock (articulo_id, ubicacion_stock_id, tipo, cantidad, usuario_id, motivo,
                                                entrega_id)
                 values (?, ?, 'ajuste', 1, ?, 'Carga', ?)
-                """, coco.getId(), origen, usuario, id), "movimientos_stock_entrega_segun_tipo");
+                """, coco.getId(), origen, usuario, id), "movimientos_stock_referencia_segun_tipo");
         rechaza(() -> movimiento("entrega_salida", destino, "-1", id));
         rechaza(() -> movimiento("entrega_salida", origen, "1", id));
         rechaza(() -> movimiento("anulacion", origen, "-1", id));

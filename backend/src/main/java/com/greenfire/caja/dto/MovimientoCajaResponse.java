@@ -19,11 +19,12 @@ public record MovimientoCajaResponse(
         OffsetDateTime fechaHora,
         String usuario,
         String observacion,
-        Long corrigeMovimientoId) {
+        Long corrigeMovimientoId,
+        Long ventaId) {
 
     public static MovimientoCajaResponse de(MovimientoCaja m) {
         return new MovimientoCajaResponse(m.getId(), m.getOrigen(), m.getTipo(), m.getRubro(), m.getMedioPago(),
                 m.getMonto(), m.getFechaHora(), m.getUsuario().getNombre(), m.getObservacion(),
-                m.getCorrige() == null ? null : m.getCorrige().getId());
+                m.getCorrige() == null ? null : m.getCorrige().getId(), m.getVentaId());
     }
 }

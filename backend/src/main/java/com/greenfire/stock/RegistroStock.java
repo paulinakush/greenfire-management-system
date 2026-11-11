@@ -49,6 +49,8 @@ public class RegistroStock {
 
     private static final Set<TipoMovimientoStock> TIPOS_DE_ENTREGA = EnumSet.of(TipoMovimientoStock.entrega_salida,
             TipoMovimientoStock.entrega_recepcion, TipoMovimientoStock.anulacion, TipoMovimientoStock.devolucion);
+    private static final Set<TipoMovimientoStock> TIPOS_DE_VENTA = EnumSet.of(TipoMovimientoStock.venta,
+            TipoMovimientoStock.anulacion, TipoMovimientoStock.devolucion);
 
     private final MovimientoStockRepository movimientos;
     private final UsuarioRepository usuarios;
@@ -66,16 +68,17 @@ public class RegistroStock {
         if (tipo == TipoMovimientoStock.conteo) {
             throw new IllegalArgumentException("Los movimientos de conteo se registran con registrarConteo.");
         }
-        if (TIPOS_DE_ENTREGA.contains(tipo)) {
-            throw new IllegalArgumentException("Los movimientos de una entrega se registran con registrarEntrega.");
+        if (TIPOS_DE_ENTREGA.contains(tipo) || TIPOS_DE_VENTA.contains(tipo)) {
+            throw new IllegalArgumentException("Los movimientos de una entrega o una venta se registran con "
+                    + "registrarEntrega o registrarVenta.");
         }
-        return registrar(tipo, renglones, motivo, observaciones, usuarioId, null, null);
+        return registrar(tipo, renglones, motivo, observaciones, usuarioId, null, null, null);
     }
 
     /** Las diferencias de un conteo, como movimientos de tipo conteo que apuntan a él. */
     public List<MovimientoStock> registrarConteo(ConteoStock conteo, List<Renglon> renglones, String motivo,
             Long usuarioId) {
-        return registrar(TipoMovimientoStock.conteo, renglones, motivo, null, usuarioId, conteo, null);
+        return registrar(TipoMovimientoStock.conteo, renglones, motivo, null, usuarioId, conteo, null, null);
     }
 
     /** Los movimientos de una entrega (salida, recepción, anulación o devolución), que apuntan a ella. */
@@ -84,7 +87,41 @@ public class RegistroStock {
         if (!TIPOS_DE_ENTREGA.contains(tipo)) {
             throw new IllegalArgumentException("El tipo " + tipo + " no es de una entrega.");
         }
-        return registrar(tipo, renglones, motivo, null, usuarioId, null, entregaId);
+        return registrar(tipo, renglones, motivo, null, usuarioId, null, entregaId, null);
+    }
+
+    /**
+     * Los movimientos de una venta, que apuntan a ella: la venta (cantidades negativas), su anulación y sus
+     * devoluciones (positivas).
+     */
+    public List<MovimientoStock> registrarVenta(TipoMovimientoStock tipo, Long ventaId, List<Renglon> renglones,
+            String motivo, Long usuarioId) {
+        if (!TIPOS_DE_VENTA.contains(tipo)) {
+            throw new IllegalArgumentException("El tipo " + tipo + " no es de una venta.");
+        }
+        return registrar(tipo, renglones, motivo, null, usuarioId, null, null, ventaId);
+    }
+
+    /**
+     * Bloquea las filas de stock de los renglones, en el orden de {@link #registrar}, y verifica que cada salida
+     * alcance (las cantidades de los renglones son lo que sale, en positivo). Lo usa una operación que tiene que
+     * saber que hay stock antes de tomar otros bloqueos, como el número del comprobante de una venta.
+     */
+    public void verificarSalidas(List<Renglon> salidas) {
+        for (Renglon r : salidas.stream().sorted(ORDEN_DE_BLOQUEO).toList()) {
+            em.createNativeQuery("""
+                            insert into stock_articulos (articulo_id, ubicacion_stock_id) values (?1, ?2)
+                            on conflict (articulo_id, ubicacion_stock_id) do nothing
+                            """)
+                    .setParameter(1, r.articulo().getId())
+                    .setParameter(2, r.ubicacion().getId())
+                    .executeUpdate();
+            BigDecimal actual = cantidadBloqueada(r.articulo().getId(), r.ubicacion().getId());
+            if (actual.compareTo(r.cantidad()) < 0) {
+                throw new StockInsuficienteException("'%s' en '%s' tiene %s y se quieren sacar %s.".formatted(
+                        r.articulo().getNombre(), r.ubicacion().getNombre(), texto(actual), texto(r.cantidad())));
+            }
+        }
     }
 
     /**
@@ -110,7 +147,7 @@ public class RegistroStock {
     }
 
     private List<MovimientoStock> registrar(TipoMovimientoStock tipo, List<Renglon> renglones, String motivo,
-            String observaciones, Long usuarioId, ConteoStock conteo, Long entregaId) {
+            String observaciones, Long usuarioId, ConteoStock conteo, Long entregaId, Long ventaId) {
         if (renglones.isEmpty()) {
             throw new ReglaNegocioException("La operación no tiene renglones.");
         }
@@ -128,7 +165,8 @@ public class RegistroStock {
                 }
             }
             registrados.add(movimientos.save(new MovimientoStock(r.articulo(), r.ubicacion(), tipo, r.cantidad(),
-                    r.loteId(), usuarios.getReferenceById(usuarioId), motivo, observaciones, conteo, entregaId)));
+                    r.loteId(), usuarios.getReferenceById(usuarioId), motivo, observaciones, conteo, entregaId,
+                    ventaId)));
         }
         return registrados;
     }

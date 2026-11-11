@@ -44,12 +44,15 @@ public class MovimientoCaja extends EntidadBase {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "corrige_movimiento_id")
     private MovimientoCaja corrige;
+    private Long ventaId;
 
     protected MovimientoCaja() {
     }
 
     MovimientoCaja(SesionCaja sesion, Usuario usuario, OrigenMovimientoCaja origen, TipoMovimientoCaja tipo,
-            RubroCaja rubro, MedioPago medioPago, BigDecimal monto, String observacion, MovimientoCaja corrige) {
+            RubroCaja rubro, MedioPago medioPago, BigDecimal monto, String observacion, MovimientoCaja corrige,
+            Long ventaId) {
+        this.ventaId = ventaId;
         this.sesion = sesion;
         this.usuario = usuario;
         this.origen = origen;
@@ -101,6 +104,11 @@ public class MovimientoCaja extends EntidadBase {
 
     public String getObservacion() {
         return observacion;
+    }
+
+    /** La venta cobrada o devuelta; null en los manuales. */
+    public Long getVentaId() {
+        return ventaId;
     }
 
     public MovimientoCaja getCorrige() {
